@@ -1,19 +1,27 @@
+# New Fleet Manager
+
 A web-based drone fleet management dashboard built with React, TypeScript, and Vite.
 Operators can organise drones into named fleets, create pre-flight check sessions,
-log and resolve in-flight alerts, and track per-drone status at a glance
+log and resolve in-flight alerts, and track per-drone status at a glance — all in a
+dark-themed, data-dense UI inspired by mission-control consoles.
 
 > All data is mock / in-memory. Fleets are persisted to `localStorage` in the browser;
 > everything else (drones, alerts, sessions) resets on page refresh. There is no backend.
 
-## Prerequisites 
-- **Node.js 18 or later** - https://nodejs.org
+---
+
+## Prerequisites
+
+- **Node.js 18 or later** — https://nodejs.org
 - **npm** (bundled with Node.js)
 
-Verify your version:
+Verify your versions:
+
 ```bash
 node -v   # should be >= 18.0.0
 npm -v
 ```
+
 ---
 
 ## Installation
@@ -31,12 +39,12 @@ npm install
 ```bash
 npm run dev
 ```
+
 Open your browser at **http://localhost:5173**
 
 The dev server supports Hot Module Replacement (HMR) — changes to source files are
 reflected in the browser instantly without a full page reload.
 
----
 ---
 
 ## Building for Production
@@ -52,6 +60,7 @@ npm run preview
 ```
 
 ---
+
 ## Tech Stack
 
 | Technology | Version | Role |
@@ -138,6 +147,3 @@ src/
 /fleet/:fleetId/session/:sessionId Dashboard         — overview + events tabs
 /fleet/:fleetId/robot/:robotId     RobotHistory      — per-drone history (stub)
 ```
-=======
-
-

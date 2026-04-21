@@ -1,20 +1,45 @@
+/*
+ * data/mockData.ts
+ *
+ * Static mock data used throughout the application in place of a real backend.
+ * All data is hard-coded — nothing here is persisted between page reloads
+ * (fleet list is the exception: it is persisted to localStorage by FleetSelection.tsx).
+ *
+ * Exported constants:
+ *   mockFleets           — two pre-built fleets (one with drones, one empty)
+ *   mockRobots           — five drone objects covering every possible RobotStatus
+ *   mockAlerts           — four alert events across different drones and categories
+ *   mockMaintenanceNotes — three maintenance tickets at various lifecycle stages
+ *   alertCategories      — master list of alert category names for dropdowns
+ *   commonProblemDescriptions — preset problem descriptions for the add-event form
+ *   mockSessions         — two historical flight sessions for fleet "1"
+ *
+ * When adding new drones for testing, give them an id starting with "RBT-"
+ * to stay consistent with the existing naming convention.
+ */
+
 import type { Robot, Alert, MaintenanceNote, Fleet, Session } from '../types';
 
+// Two sample fleets. Only fleet "1" has drones and sessions; fleet "2" is intentionally
+// empty so the UI's "no drones" empty-state can be tested.
 export const mockFleets: Fleet[] = [
   {
     id: '1',
     name: 'Warehouse Alpha Fleet',
+    // References drone ids RBT-001 through RBT-010; only RBT-001..005 exist in mockRobots.
     droneIds: ['RBT-001', 'RBT-002', 'RBT-003', 'RBT-004', 'RBT-005', 'RBT-006', 'RBT-007', 'RBT-008', 'RBT-009', 'RBT-010'],
     lastModified: new Date('2026-04-08T10:30:00'),
   },
   {
     id: '2',
     name: 'Distribution Center Fleet',
-    droneIds: [],
+    droneIds: [],  // Empty fleet — demonstrates the "add your first drone" empty state
     lastModified: new Date('2026-04-07T16:45:00'),
   },
 ];
 
+// Five drones, each demonstrating a different RobotStatus value so every status
+// badge and filter can be exercised without needing real hardware.
 export const mockRobots: Robot[] = [
   {
     id: 'RBT-001',
@@ -125,6 +150,8 @@ export const mockRobots: Robot[] = [
   },
 ];
 
+// Pre-seeded alert events used by the Events tab and the active-alerts banner
+// in the Overview tab. Each alert maps to a drone via robotId.
 export const mockAlerts: Alert[]=[
     { 
     id: "ALT-101",
@@ -170,6 +197,8 @@ export const mockAlerts: Alert[]=[
 }
 ];
 
+// Sample maintenance tickets illustrating the three main lifecycle stages
+// (open → in-progress → resolved). Used by the drone detail view.
 export const mockMaintenanceNotes: MaintenanceNote[] = [
     {
         id: 'MNT-001',
@@ -197,6 +226,9 @@ export const mockMaintenanceNotes: MaintenanceNote[] = [
         timestamp: new Date('2026-04-08T11:30:00')
     }
 ];
+// Master list of alert category names populated into the "Add Event" dropdown.
+// A custom category typed by the user gets auto-promoted into this list after
+// being used 10 times (see trackCategoryUsage in Events.tsx).
 export const alertCategories = [
     'Battery',
     'Navigation',
@@ -209,6 +241,8 @@ export const alertCategories = [
     'Security',
 ];
 
+// Pre-set problem description options for the "Add Event" form.
+// Like alertCategories, custom descriptions are promoted here after 10 uses.
 export const commonProblemDescriptions = [
     'Premature Return',
     'GPS loss',
@@ -220,6 +254,9 @@ export const commonProblemDescriptions = [
     'Motor Malfunction',   
     'Flight Path Deviation',
 ];
+// Two historical flight sessions for fleet "1". The status counts (readyToFly,
+// warning, etc.) are snapshots captured at session creation time and do not
+// change as drone statuses evolve afterwards.
 export const mockSessions: Session[] = [
     {
         id: 'S001',
