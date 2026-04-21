@@ -6,11 +6,8 @@
  * This page acts as a shell / layout component. It:
  *   - Renders a sticky header with the fleet name, session ID, a global search
  *     input, a notification bell, and a "Back to Fleet" button.
- *   - Switches between two tab views:
- *       Overview  → drone cards with status, battery, and alert data (Overview.tsx)
- *       Events    → table of alerts with filters and an add-event form (Events.tsx)
- *   - Implements a cross-tab global search that searches drones and events
- *     simultaneously and displays combined inline results, overriding the active tab.
+ *   - Shows the Overview tab → drone cards with status, battery, and alert data (Overview.tsx)
+ *   - Implements a global search that searches drones and displays inline results.
  *
  * Data flow:
  *   - The session object is taken from location.state (populated by SessionSelection)
@@ -23,23 +20,19 @@ import { useState } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, Search, Cpu } from 'lucide-react';
 import { Overview } from '../components/Overview';
-import { Events } from '../components/Events';
-import { mockFleets, mockRobots, mockAlerts, mockSessions } from '../data/mockData';
+import { mockFleets, mockRobots, mockSessions } from '../data/mockData';
 import type { Session } from '../types';
 
-// Local union type to restrict the activeTab state to known values.
-type Tab = 'overview' | 'events';
 
 export function Dashboard () {
   const {fleetId, sessionId} = useParams<{fleetId: string, sessionId: string}>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [showNotifications, setShowNotifications] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
 
   // Initialise session from navigation state (fast path) or look it up by URL param.
-  // useState with an initialiser function avoids re-running the find on every render.
+  // useState with an initialiser function avoids re-running the find on every render.-->current session can be either session or null
   const [currentSession] = useState<Session | null>(() =>
     location.state?.session || mockSessions.find(s => s.id === sessionId) || null
   );
@@ -62,19 +55,7 @@ export function Dashboard () {
       r.id.toLowerCase().includes(globalSearch.toLowerCase())||
       r.location.toLowerCase().includes(globalSearch.toLowerCase())
     ),
-    events: mockAlerts.filter(a=>
-      // Only search alerts that belong to drones in this session.
-      currentSession?.selectedDroneIds.includes(a.robotId) &&
-      (a.robotName.toLowerCase().includes(globalSearch.toLowerCase())||
-      a.description.toLowerCase().includes(globalSearch.toLowerCase())||
-      a.category.toLowerCase().includes(globalSearch.toLowerCase()))
-    ),
   } : null;
-
-  const tabs: {id: Tab, label: string}[] = [
-    {id: 'overview', label: 'Overview'},
-    {id: 'events', label: 'Events'},
-  ];
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -140,24 +121,6 @@ export function Dashboard () {
               </button>
             </div>
           </div>
-          <nav className="flex gap-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-sm font-medium transition-all rounded relative overflow-hidden ${
-                  activeTab === tab.id
-                    ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30'
-                    : 'text-neutral-500 hover:text-violet-400 hover:bg-violet-500/5'
-                }`}
-              >
-                {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet-400 to-transparent"></div>
-                )}
-                {tab.label}
-              </button>
-            ))}
-          </nav>
         </div>
       </header>
 
@@ -189,29 +152,12 @@ export function Dashboard () {
               </div>
             )}
 
-            {filteredResults.events.length > 0 && (
-              <div>
-                <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Events ({filteredResults.events.length})</h3>
-                <div className="space-y-2">
-                  {filteredResults.events.slice(0, 5).map(event => (
-                    <div key={event.id} className="border border-violet-500/20 bg-gradient-to-r from-black/40 to-violet-950/10 rounded-lg p-4">
-                      <div className="text-sm font-mono text-violet-400">{event.robotName}</div>
-                      <div className="text-xs text-neutral-400 mt-1">{event.description}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {filteredResults.drones.length === 0 && filteredResults.events.length === 0 && (
+            {filteredResults.drones.length === 0 && (
               <div className="text-center py-12 text-neutral-600">No results found</div>
             )}
           </div>
         ) : (
-          <>
-            {activeTab === 'overview' && <Overview sessionDrones={sessionDrones} fleetId={fleetId} />}
-            {activeTab === 'events' && <Events sessionDrones={sessionDrones} />}
-          </>
+          <Overview sessionDrones={sessionDrones} fleetId={fleetId} />
         )}
       </main>
 

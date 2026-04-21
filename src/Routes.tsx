@@ -48,4 +48,10 @@ export const router = createBrowserRouter([
     },
     ]);
 
-  
+    /* Quick reference:
+       /                           → choose fleet
+       /fleet/1                    → see all drones in fleet 1
+       /fleet/1/session/new        → create a session for fleet 1
+       /fleet/1/session/SES-001    → session dashboard for SES-001
+       /fleet/1/robot/RBT-001      → robot history for RBT-001
+    */

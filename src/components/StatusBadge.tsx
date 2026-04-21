@@ -11,9 +11,6 @@
  *
  * The Props type is a discriminated union that enforces exactly one of
  * `status` or `severity` is provided — passing both or neither is a type error.
- *
- * All colour/label mappings are defined in the config lookup tables below so
- * adding a new status or severity only requires editing one place.
  */
 
 import type { RobotStatus, AlertSeverity } from '../types';
