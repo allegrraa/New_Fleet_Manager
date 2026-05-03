@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma *)",
+      "PowerShell($content = Get-Content 'C:\\\\Users\\\\UserAdmin\\\\New_Fleet_Manager\\\\backend\\\\prisma\\\\drones.csv' -Raw; Write-Host \"File size: $\\($content.Length\\)\"; Write-Host \"First 300 chars:\"; Write-Host $content.Substring\\(0, [Math]::Min\\(300, $content.Length\\)\\))",
+      "PowerShell($bytes = \\(Get-Item 'C:\\\\Users\\\\UserAdmin\\\\New_Fleet_Manager\\\\backend\\\\prisma\\\\drones.csv'\\).Length; Write-Host \"File size: $bytes bytes\")"
+    ]
+  }
+}

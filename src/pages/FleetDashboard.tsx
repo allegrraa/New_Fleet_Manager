@@ -21,78 +21,97 @@
  *   - Sessions: filtered from mockSessions by fleetId (in-memory only; not persisted).
  */
 
-import { useState } from 'react'
-import { useParams, Link, useNavigate, useLocation} from 'react-router-dom';
-import { ArrowLeft, Cpu, Plus, Calendar, FileText, TrendingUp, TrendingDown, ArrowRight, X, Trash2 } from 'lucide-react';
-import { mockFleets, mockRobots, mockSessions } from '../data/mockData';
-import type { Fleet } from '../types';
-
-// Rehydrate the fleet list from localStorage (same logic as FleetSelection.tsx).
-// The duplicate function exists because this page may be opened directly via URL,
-// bypassing FleetSelection's in-memory state.
-function loadFleets(): Fleet[] {
-  try {
-    const stored = localStorage.getItem('fleets');
-    if (stored) {
-      const parsed = JSON.parse(stored) as (Omit<Fleet, 'lastModified'> & { lastModified: string })[];
-      return parsed.map(f => ({ ...f, lastModified: new Date(f.lastModified) }));
-    }
-  } catch { /* ignore */ }
-  return mockFleets;
-}
+import { useState, useEffect } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Cpu, Plus, Calendar, FileText, TrendingUp, TrendingDown, ArrowRight, X, Trash2, Wrench } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
-import type { Robot, RobotStatus } from '../types';
+import type { Fleet, Robot, RobotStatus, MaintenanceSeverity } from '../types';
+
+function mapStatus(raw: string): RobotStatus {
+  const s = raw?.trim().toUpperCase()
+  if (s === 'WORKING') return 'ready-to-fly'
+  if (s === 'HW FAULT' || s === 'SW FAULT') return 'critical'
+  if (s === 'FAULTY') return 'warning'
+  if (s === 'OOS') return 'critical'
+  return 'maintenance-due'
+}
+
+function mapSeverity(raw: string): MaintenanceSeverity {
+  if (raw === 'origin-country' || raw === 'high') return 'origin-country'
+  if (raw === 'office' || raw === 'medium') return 'office'
+  return 'on-site'
+}
 
 export function FleetDashboard() {
-    const { fleetId } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const[showAddDroneForm, setShowAddDroneForm] = useState(false);
-    const[showAddSessionForm, setShowAddSessionForm] = useState(false);
-    const allFleets = loadFleets();
-
-    // Prefer the fleet object passed via navigation state (used when navigating back
-    // from Dashboard so the correct fleet name is shown without re-reading storage).
-    const fleet = location.state?.newFleet || allFleets.find(f => f.id === fleetId);
-
-    const [fleetDrones, setFleetDrones] = useState<Robot[]>(() => {
-    // location.state?.fleetDrones is populated when navigating from SessionSelection or
-    // Dashboard — it carries any drones that were added in-session but not in mockData.
-    if (location.state?.fleetDrones) {
-      return location.state.fleetDrones;
-    }
-    return fleet ? mockRobots.filter(r => fleet.droneIds.includes(r.id)) : [];
+  const { fleetId } = useParams();
+  const navigate = useNavigate();
+  const [showAddDroneForm, setShowAddDroneForm] = useState(false);
+  const [fleet, setFleet] = useState<Fleet | null>(null);
+  const [fleetDrones, setFleetDrones] = useState<Robot[]>([]);
+  const [fleetSessions, setFleetSessions] = useState<any[]>([]);
+  const [newDrone, setNewDrone] = useState({
+    id: '', name: '', status: 'ready-to-fly' as RobotStatus, battery: 100, location: '',
   });
-  // Sessions are filtered to this fleet only; state is local to this page render.
-  const [fleetSessions, setFleetSessions] = useState(
-    mockSessions.filter(s => s.fleetId === fleetId)
-  );
 
-    const [newDrone, setNewDrone] = useState({
-    id: '',
-    name: '',
-    status: 'ready-to-fly' as RobotStatus,
-    battery: 100,
-    location: '',
-  });
-  const [newSession, setNewSession] = useState({
-    sessionNumber: '',
-    date: new Date().toISOString().slice(0, 16),
-    notes: '',
-  });
+  useEffect(() => {
+    fetch(`http://localhost:3001/api/fleets/${fleetId}`)
+      .then(res => res.json())
+      .then(data => setFleet({ ...data, lastModified: new Date(data.lastModified) }))
+
+    fetch(`http://localhost:3001/api/robots/${fleetId}`)
+      .then(res => res.json())
+      .then(data => setFleetDrones(data.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        status: mapStatus(r.status),
+        battery: 0,
+        location: r.location,
+        lastSeen: new Date(r.lastChecked),
+        currentTask: r.reason || 'N/A',
+        version: 'N/A',
+        ipAddress: r.ipAddress || '',
+        fullVersion: 'N/A',
+        sessionCount: 0,
+        recentAlerts: [],
+        maintenanceHistory: (r.maintenanceNotes ?? []).map((n: any) => ({
+          id: n.id,
+          robotId: n.robotId,
+          robotName: r.name,
+          note: n.note,
+          status: n.status,
+          severity: mapSeverity(n.severity),
+          timestamp: new Date(n.timestamp),
+          problemCategory: n.problemCategory || undefined,
+        })),
+        lastLogRetrieval: new Date(r.lastChecked),
+        eventHistory: [],
+      }))))
+
+    fetch(`http://localhost:3001/api/sessions/${fleetId}`)
+      .then(res => res.json())
+      .then(data => setFleetSessions(data.map((s: any) => ({
+        ...s,
+        date: new Date(s.date),
+        selectedDroneIds: s.selectedDroneIds ? s.selectedDroneIds.split(',') : [],
+      }))))
+  }, [fleetId])
 
   if (!fleet) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-violet-400 mb-2">Fleet Not Found</h1>
-          <Link to="/" className="text-sm text-violet-500 hover:text-violet-400">
-            Return to Fleet Selection
-          </Link>
+          <h1 className="text-2xl font-bold text-violet-400 mb-2">Loading...</h1>
         </div>
       </div>
     );
   }
+
+  const severityOrder: Record<string, number> = {
+    'critical': 0, 'warning': 1, 'offline': 2, 'maintenance-due': 3, 'ready-to-fly': 4
+  }
+  const sortedDrones = [...fleetDrones].sort((a, b) =>
+    (severityOrder[a.status] ?? 5) - (severityOrder[b.status] ?? 5)
+  )
 
   // Guard against division-by-zero when the fleet has no drones.
   const getPercentage = (value: number, total: number) =>
@@ -137,34 +156,6 @@ export function FleetDashboard() {
 
   const handleDeleteDrone = (droneId: string) => {
     setFleetDrones(fleetDrones.filter(d => d.id !== droneId));
-  };
-
-  const handleAddSession = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSession.sessionNumber) return;
-
-    const session = {
-      id: `SES-${Date.now()}`,
-      sessionNumber: newSession.sessionNumber,
-      date: new Date(newSession.date),
-      fleetId: fleetId || '',
-      selectedDroneIds: [],
-      totalDrones: 0,
-      readyToFly: 0,
-      warning: 0,
-      critical: 0,
-      offline: 0,
-      maintenanceDue: 0,
-      notes: newSession.notes,
-    };
-
-    setFleetSessions([session, ...fleetSessions]);
-    setNewSession({
-      sessionNumber: '',
-      date: new Date().toISOString().slice(0, 16),
-      notes: '',
-    });
-    setShowAddSessionForm(false);
   };
 
   // Aggregate counts used by the status summary bar at the top of the page.
@@ -382,8 +373,8 @@ export function FleetDashboard() {
 
             {fleetDrones.length > 0 ? (
               <div className="grid grid-cols-6 gap-3">
-                {fleetDrones.map(drone => (
-                  <div key={drone.id} className="group border border-violet-500/20 bg-gradient-to-br from-black/40 to-violet-950/10 rounded-lg p-4 relative">
+                {sortedDrones.map(drone => (
+                  <div key={drone.id} onClick={() => navigate(`/fleet/${fleetId}/robot/${drone.id}`, { state: { drone, fleet } })} className="group border border-violet-500/20 bg-gradient-to-br from-black/40 to-violet-950/10 rounded-lg p-4 relative cursor-pointer hover:border-violet-500/50 transition-all">
                     <button
                       onClick={() => handleDeleteDrone(drone.id)}
                       className="absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center text-neutral-700 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100"
@@ -393,7 +384,18 @@ export function FleetDashboard() {
                     <div className="font-mono text-xs text-neutral-600 mb-1">{drone.id}</div>
                     <div className="font-semibold text-sm text-violet-300 mb-2">{drone.name}</div>
                     <StatusBadge status={drone.status} />
-                    <div className="mt-2 text-xs text-neutral-500 font-mono">{drone.battery}%</div>
+                    {drone.currentTask && drone.currentTask !== 'N/A' && (
+                      <div className="mt-2 text-xs text-orange-300/70 font-mono truncate">{drone.currentTask}</div>
+                    )}
+                    {(() => {
+                      const open = drone.maintenanceHistory.filter(n => n.status === 'open' || n.status === 'in-progress').length;
+                      return open > 0 ? (
+                        <div className="mt-1 flex items-center gap-1 text-xs font-mono text-violet-400/70">
+                          <Wrench className="w-3 h-3" />
+                          {open} maintenance open
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 ))}
               </div>
@@ -420,103 +422,17 @@ export function FleetDashboard() {
                 <span>Flight Logs</span>
                 <span className="text-sm text-neutral-600 font-mono">({fleetSessions.length})</span>
               </h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddSessionForm(true)}
-                  className="px-4 py-2 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 rounded text-sm font-medium transition-all flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Session Log
-                </button>
-                <button
-                  onClick={() => navigate(`/fleet/${fleetId}/session/new`, {
-                    state: { fleetDrones, fleetName: fleet?.name, fleet }
-                  })}
-                  className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded text-sm font-medium transition-all shadow-lg shadow-violet-500/20 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Flight Session
-                </button>
-              </div>
+              <button
+                onClick={() => navigate(`/fleet/${fleetId}/session/new`, {
+                  state: { fleetDrones, fleetName: fleet?.name, fleet }
+                })}
+                className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded text-sm font-medium transition-all shadow-lg shadow-violet-500/20 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Flight Session
+              </button>
             </div>
 
-            {showAddSessionForm && (
-              <div className="mb-6 border border-violet-500/30 bg-gradient-to-br from-violet-950/20 to-purple-950/20 backdrop-blur-sm rounded-lg p-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-violet-400/50 to-transparent"></div>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></span>
-                      Add Session Log
-                    </h3>
-                    <p className="text-sm text-neutral-400">Manually add a session log entry</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddSessionForm(false);
-                      setNewSession({ sessionNumber: '', date: new Date().toISOString().slice(0, 16), notes: '' });
-                    }}
-                    className="w-8 h-8 rounded hover:bg-violet-500/10 flex items-center justify-center transition-colors border border-violet-500/20"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddSession} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-violet-300">Session Number / ID</label>
-                      <input
-                        type="text"
-                        value={newSession.sessionNumber}
-                        onChange={(e) => setNewSession({ ...newSession, sessionNumber: e.target.value })}
-                        placeholder="e.g., 2026-04-13-A"
-                        className="w-full bg-black/50 border border-violet-500/20 rounded px-4 py-2 focus:outline-none focus:border-violet-500/50 transition-colors font-mono text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-violet-300">Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        value={newSession.date}
-                        onChange={(e) => setNewSession({ ...newSession, date: e.target.value })}
-                        className="w-full bg-black/50 border border-violet-500/20 rounded px-4 py-2 focus:outline-none focus:border-violet-500/50 transition-colors font-mono text-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-violet-300">Notes</label>
-                    <textarea
-                      value={newSession.notes}
-                      onChange={(e) => setNewSession({ ...newSession, notes: e.target.value })}
-                      placeholder="Add session notes..."
-                      rows={2}
-                      className="w-full bg-black/50 border border-violet-500/20 rounded px-4 py-2 focus:outline-none focus:border-violet-500/50 transition-colors resize-none text-sm"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddSessionForm(false);
-                        setNewSession({ sessionNumber: '', date: new Date().toISOString().slice(0, 16), notes: '' });
-                      }}
-                      className="px-4 py-2 text-sm hover:bg-violet-500/10 rounded transition-colors border border-violet-500/20"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded text-sm font-medium transition-all shadow-lg shadow-violet-500/20"
-                    >
-                      Add Session Log
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
             {fleetSessions.length > 0 ? (
               <div className="space-y-3">
                 {fleetSessions.map(session => {
@@ -600,26 +516,17 @@ export function FleetDashboard() {
                 <Calendar className="w-12 h-12 text-violet-400/30 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-violet-300 mb-2">No Flight Logs Yet</h3>
                 <p className="text-sm text-neutral-500 mb-4">
-                  Add a session log manually or create a flight session with your drones.
+                  Create a flight session to start logging drone activity.
                 </p>
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => setShowAddSessionForm(true)}
-                    className="px-4 py-2 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 rounded text-sm font-medium transition-all inline-flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Session Log
-                  </button>
-                  <button
-                    onClick={() => navigate(`/fleet/${fleetId}/session/new`, {
-                      state: { fleetDrones, fleetName: fleet?.name, fleet }
-                    })}
-                    className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded text-sm font-medium transition-all shadow-lg shadow-violet-500/20 inline-flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Flight Session
-                  </button>
-                </div>
+                <button
+                  onClick={() => navigate(`/fleet/${fleetId}/session/new`, {
+                    state: { fleetDrones, fleetName: fleet?.name, fleet }
+                  })}
+                  className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded text-sm font-medium transition-all shadow-lg shadow-violet-500/20 inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Flight Session
+                </button>
               </div>
             )}
           </div>

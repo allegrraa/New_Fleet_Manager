@@ -28,7 +28,7 @@ export type AlertSeverity = 'info' | 'warning' | 'error' | 'resolved';
 export type MaintenanceStatus = 'open' | 'in-progress' | 'resolved' | 'archived';
 
 // How urgent a maintenance problem is.
-export type MaintenanceSeverity = 'low' | 'medium' | 'high';
+export type MaintenanceSeverity = 'on-site' | 'office' | 'origin-country';
 
 /* ── Core domain interfaces ─────────────────────────────────────────────────── */
 
@@ -100,6 +100,19 @@ export interface Session {
   offline: number;
   maintenanceDue: number;
   notes: string;
+}
+
+// A fix guide entry in the fixes wiki.
+export interface Fix {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  symptoms: string[];
+  solution: string;
+  pdfUrl?: string;
+  pdfName?: string;
+  createdAt: Date;
 }
 
 // Tracks how many times a custom alert category / description has been used,

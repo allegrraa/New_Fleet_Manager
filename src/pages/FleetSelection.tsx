@@ -16,8 +16,7 @@
 
 import { Link } from 'react-router-dom';
 import { Plus, Cpu, X, Trash2, Radio, Navigation, Wifi, Activity, ChevronRight, Crosshair } from 'lucide-react';
-import { mockFleets } from '../data/mockData';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Fleet } from '../types';
 
 /*
@@ -26,30 +25,30 @@ import type { Fleet } from '../types';
  * we manually rehydrate lastModified back into a real Date after parsing.
  * Falls back to mockFleets if nothing is stored or JSON is malformed.
  */
-function loadFleets(): Fleet[] {
-    try {
-        const stored = localStorage.getItem('fleets');
-        if (stored) {
-            // Cast to a type where lastModified is a string, then convert each entry.
-            const parsed = JSON.parse(stored) as (Omit<Fleet, 'lastModified'> & { lastModified: string })[];
-            return parsed.map(f => ({ ...f, lastModified: new Date(f.lastModified) }));
-        }
-    } catch { /* ignore parse errors — corrupt storage should not crash the app */ }
-    return mockFleets;
-}
+
 
 export function FleetSelection() {
     // loadFleets is passed as an initialiser function (not called immediately)
     // so it only runs once on mount, not on every re-render.
-    const [fleets, setFleets] = useState<Fleet[]>(loadFleets);
+    const [fleets, setFleets] = useState<Fleet[]>([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newFleetName, setNewFleetName] = useState('');
+// Fetch fleets from the backend API on component mount, and convert lastModified to Date objects.
+    useEffect(() => {
+    fetch('http://localhost:3001/api/fleets')
+        .then(res => res.json())
+        .then(data => setFleets(data.map((f: any) => ({
+          ...f,
+          lastModified: new Date(f.lastModified),
+          droneIds: f.droneIds ? f.droneIds.split(',').filter(Boolean) : [],
+        }))))
+}, [])
 
     // Single helper that keeps React state and localStorage in sync at all times.
-    const saveFleets = (updated: Fleet[]) => {
-        setFleets(updated);
-        localStorage.setItem('fleets', JSON.stringify(updated));
-    };
+   const saveFleets = async (updated: Fleet[]) => {
+    setFleets(updated);
+};
+
 
     // Converts an absolute Date into a human-readable relative string for the fleet list.
     const formatDate = (date: Date) => {
@@ -64,26 +63,28 @@ export function FleetSelection() {
     };
 
     // e.preventDefault() stops the parent <Link> from navigating when the trash icon is clicked.
-    const handleDeleteFleet = (e: React.MouseEvent, fleetId: string) => {
+    const handleDeleteFleet = async (e: React.MouseEvent, fleetId: string) => {
         e.preventDefault();
-        saveFleets(fleets.filter(f => f.id !== fleetId));
-    };
+        await fetch(`http://localhost:3001/api/fleets/${fleetId}`, { method: 'DELETE' })
+        setFleets(fleets.filter(f => f.id !== fleetId))
+    }
 
-    const handleCreateFleet = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        if (newFleetName.trim()) {
-            const newFleet: Fleet = {
-                id: `fleet-${Date.now()}`,  // Timestamp-based id is simple and collision-free
-                name: newFleetName.trim(),
-                droneIds: [],               // New fleets start with no drones
-                lastModified: new Date(),
-            };
-            // Prepend so the newest fleet appears at the top of the list.
-            saveFleets([newFleet, ...fleets]);
-            setShowCreateForm(false);
-            setNewFleetName('');
-        }
-    };
+
+    const handleCreateFleet = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (newFleetName.trim()) {
+        const res = await fetch('http://localhost:3001/api/fleets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newFleetName.trim(), droneIds: '' })
+        })
+        const newFleet = await res.json()
+        setFleets([{ ...newFleet, lastModified: new Date(newFleet.lastModified) }, ...fleets])
+        setShowCreateForm(false)
+        setNewFleetName('')
+    }
+}
+
 
     return (
         <div className="min-h-screen bg-[#06040f] text-white relative overflow-hidden">

@@ -1,0 +1,63 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+model Fleet {
+  id           String    @id @default(cuid())
+  name         String
+  droneIds     String
+  lastModified DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  sessionNumber    String
+  date             DateTime
+  fleetId          String
+  fleet            Fleet    @relation(fields: [fleetId], references: [id])
+  selectedDroneIds String
+  totalDrones      Int
+  readyToFly       Int
+  warning          Int
+  critical         Int
+  offline          Int
+  maintenanceDue   Int
+  notes            String   @default("")
+}
+
+model Robot {
+  id              String    @id @default(cuid())
+  name            String
+  ipAddress       String
+  status          String
+  reason          String    @default("")
+  lastChecked     DateTime
+  location        String
+  ownedBy         String    @default("")
+  remarks         String    @default("")
+  fleetId         String
+  maintenanceNotes MaintenanceNote[]
+}
+
+model MaintenanceNote {
+  id              String   @id @default(cuid())
+  robotId         String
+  robot           Robot    @relation(fields: [robotId], references: [id])
+  note            String
+  status          String
+  severity        String   @default("low")
+  problemCategory String   @default("")
+  timestamp       DateTime @default(now())
+}

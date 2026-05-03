@@ -1,21 +1,33 @@
-/*
- * pages/RobotHistory.tsx
- *
- * Individual drone / robot history page — reached via /fleet/:fleetId/robot/:robotId.
- *
- * This page is currently a placeholder ("coming soon"). In its final form it
- * is intended to show the full event and maintenance history for a single drone.
- *
- * The "View History" link in Overview.tsx's RobotCard navigates here.
- * The back arrow returns to the fleet dashboard for the parent fleet.
- */
-
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export function RobotHistory() {
-  // Both params come from the URL: /fleet/:fleetId/robot/:robotId
   const { fleetId, robotId } = useParams();
+  const [robot, setRobot] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:3001/api/robots/single/${robotId}`)
+      .then(res => res.json())
+      .then(data => setRobot(data))
+  }, [robotId])
+
+  if (!robot) return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <p className="text-neutral-500">Loading...</p>
+    </div>
+  )
+
+  const statusColour: Record<string, string> = {
+    'critical': 'text-red-400 border-red-500/30 bg-red-950/20',
+    'warning': 'text-orange-400 border-orange-500/30 bg-orange-950/20',
+    'ready-to-fly': 'text-green-400 border-green-500/30 bg-green-950/20',
+    'offline': 'text-neutral-400 border-neutral-500/30 bg-neutral-950/20',
+    'maintenance-due': 'text-purple-400 border-purple-500/30 bg-purple-950/20',
+  }
+
+  const rawStatus = robot.status || robot.rawStatus || 'N/A'
+  const colour = statusColour[robot.status] || 'text-neutral-400 border-neutral-500/30 bg-neutral-950/20'
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -26,14 +38,58 @@ export function RobotHistory() {
         >
           <ArrowLeft className="w-4 h-4 text-violet-400" />
         </Link>
-        <h1 className="text-xl font-bold text-violet-400">
-          Robot History — {robotId}
-        </h1>
+        <h1 className="text-xl font-bold text-violet-400">{robot.name}</h1>
+        <span className={`text-xs font-mono px-3 py-1 rounded-full border ${colour}`}>
+          {rawStatus}
+        </span>
       </header>
-      {/* Placeholder content — replace with real history data when implemented. */}
-      <main className="flex-1 flex items-center justify-center text-neutral-500">
-        Robot history coming soon.
+
+      <main className="p-8 max-w-4xl mx-auto w-full space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="border border-violet-500/20 rounded-lg p-5 bg-black/40">
+            <div className="text-xs text-neutral-500 font-mono uppercase tracking-wider mb-3">Drone Info</div>
+            <div className="space-y-3">
+              <Row label="Name" value={robot.name} />
+              <Row label="IP Address" value={robot.ipAddress || '—'} />
+              <Row label="Location" value={robot.location || '—'} />
+              <Row label="Owned By" value={robot.ownedBy || '—'} />
+            </div>
+          </div>
+
+          <div className="border border-violet-500/20 rounded-lg p-5 bg-black/40">
+            <div className="text-xs text-neutral-500 font-mono uppercase tracking-wider mb-3">Status Details</div>
+            <div className="space-y-3">
+              <Row label="Status" value={rawStatus} />
+              <Row label="Reason" value={robot.reason || '—'} />
+              <Row label="Last Checked" value={robot.lastChecked ? new Date(robot.lastChecked).toLocaleDateString() : '—'} />
+              <Row label="Remarks" value={robot.remarks || '—'} />
+            </div>
+          </div>
+        </div>
+
+        {robot.maintenanceNotes?.length > 0 && (
+          <div className="border border-violet-500/20 rounded-lg p-5 bg-black/40">
+            <div className="text-xs text-neutral-500 font-mono uppercase tracking-wider mb-3">Maintenance Notes</div>
+            <div className="space-y-2">
+              {robot.maintenanceNotes.map((note: any) => (
+                <div key={note.id} className="border border-neutral-800 rounded p-3 text-sm">
+                  <div className="text-neutral-300">{note.note}</div>
+                  <div className="text-xs text-neutral-600 font-mono mt-1">{new Date(note.timestamp).toLocaleDateString()} · {note.status}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
-  );
+  )
+}
+
+function Row({ label, value }: { label: string, value: string }) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-neutral-500 font-mono">{label}</span>
+      <span className="text-neutral-200">{value}</span>
+    </div>
+  )
 }

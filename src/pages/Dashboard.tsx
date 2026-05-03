@@ -1,58 +1,86 @@
-/*
- * pages/Dashboard.tsx
- *
- * The main session workspace — reached via /fleet/:fleetId/session/:sessionId.
- *
- * This page acts as a shell / layout component. It:
- *   - Renders a sticky header with the fleet name, session ID, a global search
- *     input, a notification bell, and a "Back to Fleet" button.
- *   - Shows the Overview tab → drone cards with status, battery, and alert data (Overview.tsx)
- *   - Implements a global search that searches drones and displays inline results.
- *
- * Data flow:
- *   - The session object is taken from location.state (populated by SessionSelection)
- *     or looked up in mockSessions by sessionId for direct URL access.
- *   - sessionDrones is the filtered list of Robot objects whose IDs appear in
- *     currentSession.selectedDroneIds — this is passed as a prop to both child tabs.
- */
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, Search, Cpu } from 'lucide-react';
 import { Overview } from '../components/Overview';
-import { mockFleets, mockRobots, mockSessions } from '../data/mockData';
-import type { Session } from '../types';
+import { Events } from '../components/Events';
+import { Maintenance } from '../components/Maintenance';
+import type { Session, Robot, RobotStatus } from '../types';
 
+type Tab = 'overview' | 'events' | 'maintenance';
 
-export function Dashboard () {
-  const {fleetId, sessionId} = useParams<{fleetId: string, sessionId: string}>();
+function mapStatus(raw: string): RobotStatus {
+  const s = raw?.trim().toUpperCase();
+  if (s === 'WORKING') return 'ready-to-fly';
+  if (s === 'HW FAULT' || s === 'SW FAULT' || s === 'OOS') return 'critical';
+  if (s === 'FAULTY') return 'warning';
+  return 'maintenance-due';
+}
+
+function mapRobot(r: any): Robot {
+  return {
+    id: r.id,
+    name: r.name,
+    status: mapStatus(r.status),
+    battery: 0,
+    location: r.location || '',
+    lastSeen: new Date(r.lastChecked),
+    currentTask: r.reason || 'N/A',
+    version: 'N/A',
+    ipAddress: r.ipAddress || '',
+    fullVersion: 'N/A',
+    sessionCount: 0,
+    recentAlerts: [],
+    maintenanceHistory: [],
+    lastLogRetrieval: new Date(r.lastChecked),
+    eventHistory: [],
+  };
+}
+
+export function Dashboard() {
+  const { fleetId, sessionId } = useParams<{ fleetId: string; sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [showNotifications, setShowNotifications] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
 
-  // Initialise session from navigation state (fast path) or look it up by URL param.
-  // useState with an initialiser function avoids re-running the find on every render.-->current session can be either session or null
-  const [currentSession] = useState<Session | null>(() =>
-    location.state?.session || mockSessions.find(s => s.id === sessionId) || null
+  const [currentSession, setCurrentSession] = useState<Session | null>(
+    location.state?.session || null
   );
+  const [sessionDrones, setSessionDrones] = useState<Robot[]>([]);
+  const [fleet, setFleet] = useState<any>(location.state?.fleet || null);
 
-  const fleet = mockFleets.find(f => f.id === fleetId);
-  // availableDrones is the full fleet roster — used when navigating back to FleetDashboard.
-  const availableDrones = mockRobots.filter(r => fleet?.droneIds.includes(r.id));
+  useEffect(() => {
+    // If session came from navigation state, filter the drones that were passed along.
+    if (location.state?.session && location.state?.fleetDrones) {
+      const ids: string[] = location.state.session.selectedDroneIds ?? [];
+      setSessionDrones(
+        (location.state.fleetDrones as Robot[]).filter(r => ids.includes(r.id))
+      );
+      return;
+    }
 
-  // sessionDrones is the subset selected for this specific session.
-  const sessionDrones = currentSession
-    ? mockRobots.filter(r => currentSession.selectedDroneIds.includes(r.id))
-    : [];
+    // Direct URL access — fetch everything from the backend.
+    Promise.all([
+      fetch(`http://localhost:3001/api/sessions/${fleetId}`).then(r => r.json()),
+      fetch(`http://localhost:3001/api/robots/${fleetId}`).then(r => r.json()),
+      fleet ? Promise.resolve(fleet) : fetch(`http://localhost:3001/api/fleets/${fleetId}`).then(r => r.json()),
+    ]).then(([sessions, robots, fleetData]) => {
+      const raw = sessions.find((s: any) => s.id === sessionId);
+      if (raw) {
+        const ids: string[] = raw.selectedDroneIds ? raw.selectedDroneIds.split(',').filter(Boolean) : [];
+        setCurrentSession({ ...raw, date: new Date(raw.date), selectedDroneIds: ids });
+        setSessionDrones(robots.filter((r: any) => ids.includes(r.id)).map(mapRobot));
+      }
+      if (!fleet) setFleet({ ...fleetData, lastModified: new Date(fleetData.lastModified) });
+    });
+  }, [fleetId, sessionId]);
 
-  // When the user types in the global search bar, compute matched drones and events.
-  // Returning null (instead of empty arrays) means "no search active" — the normal
-  // tab view is rendered instead of the search results panel.
   const filteredResults = globalSearch ? {
-    drones: sessionDrones.filter(r=>
-      r.name.toLowerCase().includes(globalSearch.toLowerCase())||
-      r.id.toLowerCase().includes(globalSearch.toLowerCase())||
+    drones: sessionDrones.filter(r =>
+      r.name.toLowerCase().includes(globalSearch.toLowerCase()) ||
+      r.id.toLowerCase().includes(globalSearch.toLowerCase()) ||
       r.location.toLowerCase().includes(globalSearch.toLowerCase())
     ),
   } : null;
@@ -66,7 +94,7 @@ export function Dashboard () {
       <header className="border-b border-violet-500/10 bg-black/80 backdrop-blur-sm sticky top-0 z-40 relative">
         <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
         <div className="px-8 py-4 relative z-10">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4 flex-1">
               <div className="flex items-center gap-3">
                 <Link
@@ -82,7 +110,9 @@ export function Dashboard () {
               <div className="flex-1 max-w-xl">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">{fleet?.name || 'Fleet'}</h1>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
+                    {fleet?.name || 'Fleet'}
+                  </h1>
                   {currentSession && (
                     <>
                       <span className="text-sm text-neutral-600 font-mono">/ {currentSession.sessionNumber}</span>
@@ -94,7 +124,7 @@ export function Dashboard () {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-500" />
                   <input
                     type="text"
-                    placeholder="Global search: drones, events, maintenance, fixes..."
+                    placeholder="Search drones..."
                     value={globalSearch}
                     onChange={(e) => setGlobalSearch(e.target.value)}
                     className="w-full bg-black/50 border border-violet-500/20 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors font-mono placeholder:text-neutral-600"
@@ -104,9 +134,7 @@ export function Dashboard () {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate(`/fleet/${fleetId}`, {
-                  state: { newFleet: fleet, fleetDrones: availableDrones }
-                })}
+                onClick={() => navigate(`/fleet/${fleetId}`, { state: { newFleet: fleet } })}
                 className="px-4 py-2 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
               >
                 <ArrowLeft className="w-4 h-4 text-violet-400" />
@@ -121,6 +149,26 @@ export function Dashboard () {
               </button>
             </div>
           </div>
+
+          <div className="flex gap-1">
+            {([
+              { id: 'overview', label: 'Overview' },
+              { id: 'events', label: 'Events' },
+              { id: 'maintenance', label: 'Maintenance & Fixes' },
+            ] as { id: Tab; label: string }[]).map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-1.5 rounded text-xs font-mono transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-violet-500/20 border border-violet-500/40 text-violet-300'
+                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -129,17 +177,15 @@ export function Dashboard () {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Search Results</h2>
-              <button
-                onClick={() => setGlobalSearch('')}
-                className="text-sm text-violet-400 hover:text-violet-300"
-              >
+              <button onClick={() => setGlobalSearch('')} className="text-sm text-violet-400 hover:text-violet-300">
                 Clear search
               </button>
             </div>
-
-            {filteredResults.drones.length > 0 && (
+            {filteredResults.drones.length > 0 ? (
               <div>
-                <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Drones ({filteredResults.drones.length})</h3>
+                <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">
+                  Drones ({filteredResults.drones.length})
+                </h3>
                 <div className="grid grid-cols-4 gap-3">
                   {filteredResults.drones.map(drone => (
                     <div key={drone.id} className="border border-violet-500/20 bg-gradient-to-br from-black/40 to-violet-950/10 rounded-lg p-4">
@@ -150,21 +196,18 @@ export function Dashboard () {
                   ))}
                 </div>
               </div>
-            )}
-
-            {filteredResults.drones.length === 0 && (
+            ) : (
               <div className="text-center py-12 text-neutral-600">No results found</div>
             )}
           </div>
         ) : (
-          <Overview sessionDrones={sessionDrones} fleetId={fleetId} />
+          <>
+            {activeTab === 'overview' && <Overview sessionDrones={sessionDrones} fleetId={fleetId} />}
+            {activeTab === 'events' && <Events sessionDrones={sessionDrones} />}
+            {activeTab === 'maintenance' && <Maintenance sessionDrones={sessionDrones} />}
+          </>
         )}
       </main>
-
-
     </div>
   );
 }
-
-
-

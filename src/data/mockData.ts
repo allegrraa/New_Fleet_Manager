@@ -18,7 +18,7 @@
  * to stay consistent with the existing naming convention.
  */
 
-import type { Robot, Alert, MaintenanceNote, Fleet, Session } from '../types';
+import type { Robot, Alert, MaintenanceNote, Fleet, Session, Fix } from '../types';
 
 // Two sample fleets. Only fleet "1" has drones and sessions; fleet "2" is intentionally
 // empty so the UI's "no drones" empty-state can be tested.
@@ -287,4 +287,6 @@ export const mockSessions: Session[] = [
         notes: 'Standard flight check with 9 drones.'
     },
 ];
+
+export const mockFixes: Fix[] = [];
 
