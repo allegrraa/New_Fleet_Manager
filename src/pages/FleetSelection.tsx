@@ -239,7 +239,7 @@ export function FleetSelection() {
                     <h1 className="text-5xl font-bold tracking-tight mb-3">
                         <span className="bg-gradient-to-r from-white via-violet-200 to-violet-400 bg-clip-text text-transparent">Drone Fleet</span>
                         <br />
-                        <span className="bg-gradient-to-r from-violet-400 to-purple-500 bg-clip-text text-transparent">Command Centre</span>
+                        <span className="bg-gradient-to-r from-violet-400 to-purple-500 bg-clip-text text-transparent">Manager</span>
                     </h1>
                     <p className="text-neutral-500 font-mono text-sm tracking-wider">AUTONOMOUS AERIAL OPERATIONS PLATFORM</p>
 
