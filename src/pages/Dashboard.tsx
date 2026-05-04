@@ -194,7 +194,7 @@ export function Dashboard() {
         ) : (
           <>
             {activeTab === 'overview' && <Overview sessionDrones={sessionDrones} fleetId={fleetId} />}
-            {activeTab === 'events' && <Events sessionDrones={sessionDrones} />}
+            {activeTab === 'events' && <Events sessionDrones={sessionDrones} sessionId={currentSession?.id} />}
             {activeTab === 'maintenance' && <Maintenance sessionDrones={sessionDrones} />}
           </>
         )}

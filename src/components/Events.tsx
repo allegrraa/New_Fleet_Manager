@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter } from 'lucide-react';
-import { mockAlerts, alertCategories, commonProblemDescriptions } from '../data/mockData';
+import { Plus, Filter, Trash2 } from 'lucide-react';
+import { alertCategories, commonProblemDescriptions } from '../data/mockData';
 import type { Alert, AlertSeverity, CategoryUsage, Robot } from '../types';
 import { StatusBadge } from './StatusBadge';
 
 interface EventsProps {
   sessionDrones: Robot[];
+  sessionId?: string;
 }
 
-export function Events({ sessionDrones }: EventsProps) {
+export function Events({ sessionDrones, sessionId }: EventsProps) {
   const sessionDroneIds = sessionDrones.map(d => d.id);
-  const [alerts, setAlerts] = useState<Alert[]>(
-    mockAlerts.filter(a => sessionDroneIds.includes(a.robotId))
-  );
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filterRobot, setFilterRobot] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState<'all' | AlertSeverity>('all');
@@ -25,7 +24,6 @@ export function Events({ sessionDrones }: EventsProps) {
   const [problemDescriptions, setProblemDescriptions] = useState(commonProblemDescriptions);
   const [descriptionUsage, setDescriptionUsage] = useState<CategoryUsage[]>([]);
   const [customDescriptionInput, setCustomDescriptionInput] = useState('');
-
   const [showCustomDescription, setShowCustomDescription] = useState(false);
 
   const [newAlert, setNewAlert] = useState({
@@ -35,6 +33,32 @@ export function Events({ sessionDrones }: EventsProps) {
     description: '',
   });
 
+  const droneIdKey = sessionDroneIds.join(',');
+
+  // Load events from backend when the drone list changes
+  useEffect(() => {
+    if (!sessionDroneIds.length) return;
+    fetch('http://localhost:3001/api/events/by-robots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotIds: sessionDroneIds }),
+    })
+      .then(r => r.json())
+      .then((data: any[]) => {
+        setAlerts(data.map(e => ({
+          id: e.id,
+          robotId: e.robotId,
+          robotName: sessionDrones.find(d => d.id === e.robotId)?.name ?? e.robotId,
+          category: e.category,
+          severity: e.severity as AlertSeverity,
+          description: e.description,
+          timestamp: new Date(e.timestamp),
+          resolved: e.resolved,
+        })));
+      })
+      .catch(console.error);
+  }, [droneIdKey]);
+
   const filteredAlerts = alerts
     .filter(alert => {
       const matchesRobot = filterRobot === 'all' || alert.robotId === filterRobot;
@@ -43,36 +67,27 @@ export function Events({ sessionDrones }: EventsProps) {
       const matchesResolved = filterResolved === 'all' ||
         (filterResolved === 'resolved' && alert.resolved) ||
         (filterResolved === 'unresolved' && !alert.resolved);
-
       return matchesRobot && matchesCategory && matchesSeverity && matchesResolved;
     })
     .sort((a, b) => {
       if (a.resolved && !b.resolved) return 1;
       if (!a.resolved && b.resolved) return -1;
-
       const severityOrder = { 'error': 0, 'warning': 1, 'info': 2, 'resolved': 3 };
       const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
       if (severityDiff !== 0) return severityDiff;
-
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
 
   const trackCategoryUsage = (category: string) => {
     if (categories.includes(category)) return;
-
     const existingUsage = categoryUsage.find(u => u.category === category);
     let newUsage: CategoryUsage[];
-
     if (existingUsage) {
-      newUsage = categoryUsage.map(u =>
-        u.category === category ? { ...u, count: u.count + 1 } : u
-      );
+      newUsage = categoryUsage.map(u => u.category === category ? { ...u, count: u.count + 1 } : u);
     } else {
       newUsage = [...categoryUsage, { category, count: 1 }];
     }
-
     setCategoryUsage(newUsage);
-
     const updatedUsage = newUsage.find(u => u.category === category);
     if (updatedUsage && updatedUsage.count >= 10 && !categories.includes(category)) {
       setCategories([...categories, category]);
@@ -82,20 +97,14 @@ export function Events({ sessionDrones }: EventsProps) {
 
   const trackDescriptionUsage = (description: string) => {
     if (problemDescriptions.includes(description)) return;
-
     const existingUsage = descriptionUsage.find(u => u.category === description);
     let newUsage: CategoryUsage[];
-
     if (existingUsage) {
-      newUsage = descriptionUsage.map(u =>
-        u.category === description ? { ...u, count: u.count + 1 } : u
-      );
+      newUsage = descriptionUsage.map(u => u.category === description ? { ...u, count: u.count + 1 } : u);
     } else {
       newUsage = [...descriptionUsage, { category: description, count: 1 }];
     }
-
     setDescriptionUsage(newUsage);
-
     const updatedUsage = newUsage.find(u => u.category === description);
     if (updatedUsage && updatedUsage.count >= 10 && !problemDescriptions.includes(description)) {
       setProblemDescriptions([...problemDescriptions, description]);
@@ -103,57 +112,68 @@ export function Events({ sessionDrones }: EventsProps) {
     }
   };
 
-  const handleAddAlert = () => {
+  const handleAddAlert = async () => {
     if (!newAlert.robotId || !newAlert.category || !newAlert.description) return;
-
     const robot = sessionDrones.find(r => r.id === newAlert.robotId);
     if (!robot) return;
 
-    const alert: Alert = {
-      id: `ALT-${String(alerts.length + 1).padStart(3, '0')}`,
-      robotId: newAlert.robotId,
-      robotName: robot.name,
-      category: newAlert.category,
-      severity: newAlert.severity,
-      description: newAlert.description,
-      timestamp: new Date(),
-      resolved: false,
-    };
+    const res = await fetch('http://localhost:3001/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        robotId: newAlert.robotId,
+        category: newAlert.category,
+        severity: newAlert.severity,
+        description: newAlert.description,
+        resolved: false,
+        sessionId: sessionId ?? '',
+      }),
+    });
+    const created = await res.json();
 
     trackCategoryUsage(newAlert.category);
     trackDescriptionUsage(newAlert.description);
 
+    const alert: Alert = {
+      id: created.id,
+      robotId: created.robotId,
+      robotName: robot.name,
+      category: created.category,
+      severity: created.severity as AlertSeverity,
+      description: created.description,
+      timestamp: new Date(created.timestamp),
+      resolved: created.resolved,
+    };
+
     setAlerts([alert, ...alerts]);
-    setNewAlert({
-      robotId: '',
-      category: '',
-      severity: 'info',
-      description: '',
-    });
+    setNewAlert({ robotId: '', category: '', severity: 'info', description: '' });
     setCustomCategoryInput('');
     setCustomDescriptionInput('');
     setShowCustomDescription(false);
     setShowAddForm(false);
   };
 
-  const toggleResolved = (alertId: string) => {
-    setAlerts(alerts.map(alert => {
-      if (alert.id === alertId) {
-        const nowResolved = !alert.resolved;
-        if (nowResolved) {
-          const robot = sessionDrones.find(r => r.id === alert.robotId);
-          if (robot && robot.status === 'critical' && alerts.filter(a => a.robotId === robot.id && a.severity === 'error' && !a.resolved).length === 1) {
-            robot.status = 'ready-to-fly';
-          }
-        }
-        return {
-          ...alert,
-          resolved: nowResolved,
-          resolvedAt: nowResolved ? new Date() : undefined
-        };
-      }
-      return alert;
-    }));
+  const deleteAlert = async (alertId: string) => {
+    await fetch(`http://localhost:3001/api/events/${alertId}`, { method: 'DELETE' });
+    setAlerts(alerts.filter(a => a.id !== alertId));
+  };
+
+  const toggleResolved = async (alertId: string) => {
+    const alert = alerts.find(a => a.id === alertId);
+    if (!alert) return;
+    const nowResolved = !alert.resolved;
+
+    await fetch(`http://localhost:3001/api/events/${alertId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolved: nowResolved }),
+    });
+
+    setAlerts(alerts.map(a =>
+      a.id === alertId
+        ? { ...a, resolved: nowResolved, resolvedAt: nowResolved ? new Date() : undefined }
+        : a
+    ));
   };
 
   const addCategory = () => {
@@ -164,12 +184,7 @@ export function Events({ sessionDrones }: EventsProps) {
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -278,7 +293,7 @@ export function Events({ sessionDrones }: EventsProps) {
               >
                 <option value="">Select Drone</option>
                 {sessionDrones.map(robot => (
-                  <option key={robot.id} value={robot.id}>{robot.name} ({robot.id})</option>
+                  <option key={robot.id} value={robot.id}>{robot.name}</option>
                 ))}
               </select>
             </div>
@@ -296,9 +311,7 @@ export function Events({ sessionDrones }: EventsProps) {
                   value={newAlert.category}
                   onChange={(e) => {
                     setNewAlert({ ...newAlert, category: e.target.value });
-                    if (e.target.value !== 'custom') {
-                      setCustomCategoryInput('');
-                    }
+                    if (e.target.value !== 'custom') setCustomCategoryInput('');
                   }}
                   className="w-full bg-black/50 border border-violet-500/20 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors font-mono"
                 >
@@ -409,14 +422,20 @@ export function Events({ sessionDrones }: EventsProps) {
               <th className="text-left px-6 py-3 text-xs font-mono uppercase tracking-wider text-neutral-500">Description</th>
               <th className="text-left px-6 py-3 text-xs font-mono uppercase tracking-wider text-neutral-500">Timestamp</th>
               <th className="text-left px-6 py-3 text-xs font-mono uppercase tracking-wider text-neutral-500">Status</th>
+              <th className="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody>
-            {filteredAlerts.map((alert, idx) => (
+            {filteredAlerts.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-neutral-600 font-mono text-sm">
+                  No events recorded for this session
+                </td>
+              </tr>
+            ) : filteredAlerts.map((alert, idx) => (
               <tr key={alert.id} className={`border-b border-violet-500/5 transition-colors hover:bg-violet-500/5 ${idx % 2 === 0 ? 'bg-black/20' : 'bg-violet-950/5'}`}>
                 <td className="px-6 py-4">
                   <div className="font-medium text-violet-300">{alert.robotName}</div>
-                  <div className="text-xs text-neutral-600 font-mono">{alert.robotId}</div>
                 </td>
                 <td className="px-6 py-4 text-sm font-mono">{alert.category}</td>
                 <td className="px-6 py-4">
@@ -434,6 +453,15 @@ export function Events({ sessionDrones }: EventsProps) {
                     } transition-all`}
                   >
                     {alert.resolved ? 'Resolved' : 'Mark Resolved'}
+                  </button>
+                </td>
+                <td className="px-6 py-4">
+                  <button
+                    onClick={() => deleteAlert(alert.id)}
+                    className="text-neutral-600 hover:text-red-400 hover:bg-red-500/10 w-7 h-7 rounded flex items-center justify-center transition-all"
+                    title="Delete event"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
               </tr>

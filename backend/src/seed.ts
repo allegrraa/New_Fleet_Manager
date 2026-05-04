@@ -25,7 +25,7 @@ async function main() {
   console.log('First data line:', JSON.stringify(dataLines[0]))
 
   const droneIds: string[] = []
-  const counts = { readyToFly: 0, warning: 0, critical: 0, offline: 0, maintenanceDue: 0 }
+  const counts = { ready: 0, reqAttention: 0, oos: 0 }
   const checkedDates: number[] = []
 
   for (const line of dataLines) {
@@ -54,10 +54,9 @@ async function main() {
 
     // Track status counts for session snapshot
     const s = status.trim().toUpperCase()
-    if (s === 'WORKING') counts.readyToFly++
-    else if (s === 'HW FAULT' || s === 'SW FAULT' || s === 'OOS') counts.critical++
-    else if (s === 'FAULTY') counts.warning++
-    else counts.maintenanceDue++
+    if (s === 'WORKING') counts.ready++
+    else if (s === 'OOS') counts.oos++
+    else counts.reqAttention++
 
     const robot = await prisma.robot.create({
       data: {
@@ -104,11 +103,9 @@ async function main() {
       fleetId: fleet.id,
       selectedDroneIds: droneIds.join(','),
       totalDrones: droneIds.length,
-      readyToFly: counts.readyToFly,
-      warning: counts.warning,
-      critical: counts.critical,
-      offline: counts.offline,
-      maintenanceDue: counts.maintenanceDue,
+      ready: counts.ready,
+      reqAttention: counts.reqAttention,
+      oos: counts.oos,
       notes: `CSV import — ${droneIds.length} drones loaded`,
     }
   })
