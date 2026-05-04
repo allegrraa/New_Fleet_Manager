@@ -1,3 +1,24 @@
+/*
+ * pages/Dashboard.tsx
+ *
+ * Session detail page — reached via /fleet/:fleetId/session/:sessionId.
+ *
+ * Responsibilities:
+ *   - Show session metadata (name, drone count) in a sticky header.
+ *   - Provide a global drone search that overrides the tab content.
+ *   - Render three tab panels, each a separate component:
+ *       Overview   → drone status cards + active alert banner (Overview.tsx)
+ *       Events     → alert/event log table with add/resolve/delete (Events.tsx)
+ *       Maintenance & Fixes → kanban maintenance board (Maintenance.tsx)
+ *
+ * Data strategy:
+ *   - Fast path: data is passed via React Router navigation state when arriving
+ *     from SessionSelection or FleetDashboard — no extra fetches needed.
+ *   - Fallback: if the user lands directly on the URL (e.g. bookmarked link),
+ *     all three resources (sessions, robots, fleet) are fetched in parallel
+ *     using Promise.all so the page loads as quickly as possible.
+ */
+
 import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Home, Search, Cpu } from 'lucide-react';
@@ -6,8 +27,12 @@ import { Events } from '../components/Events';
 import { Maintenance } from '../components/Maintenance';
 import type { Session, Robot, RobotStatus } from '../types';
 
+// Tab union type — controls which panel is active below the header.
 type Tab = 'overview' | 'events' | 'maintenance';
 
+// Converts the raw status string stored in the database to a typed RobotStatus.
+// The database stores "WORKING" and "OOS" in uppercase; everything else is treated
+// as req-attention (e.g. "FAULT", "OFFLINE", empty string, etc.).
 function mapStatus(raw: string): RobotStatus {
   const s = raw?.trim().toUpperCase();
   if (s === 'WORKING') return 'ready';
@@ -15,6 +40,9 @@ function mapStatus(raw: string): RobotStatus {
   return 'req-attention';
 }
 
+// Converts a raw backend robot record into the Robot interface used by the UI.
+// Fields that aren't stored in the DB (battery, version, sessionCount, etc.)
+// are given safe defaults rather than left as undefined.
 function mapRobot(r: any): Robot {
   return {
     id: r.id,
@@ -36,13 +64,20 @@ function mapRobot(r: any): Robot {
 }
 
 export function Dashboard() {
+  // Extract :fleetId and :sessionId from the URL (e.g. /fleet/abc/session/xyz)
   const { fleetId, sessionId } = useParams<{ fleetId: string; sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Which tab is currently selected
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+
+  // Text typed into the global search bar — when non-empty, replaces tab content
+  // with a filtered drone list across all tabs.
   const [globalSearch, setGlobalSearch] = useState('');
 
+  // currentSession starts with data from navigation state (fast) and may be
+  // overwritten by the backend fetch if the page was loaded directly.
   const [currentSession, setCurrentSession] = useState<Session | null>(
     location.state?.session || null
   );
@@ -50,7 +85,8 @@ export function Dashboard() {
   const [fleet, setFleet] = useState<any>(location.state?.fleet || null);
 
   useEffect(() => {
-    // If session came from navigation state, filter the drones that were passed along.
+    // Fast path: session + drones were passed via navigation state — just filter
+    // down to the drones that belong to this session and skip all network requests.
     if (location.state?.session && location.state?.fleetDrones) {
       const ids: string[] = location.state.session.selectedDroneIds ?? [];
       setSessionDrones(
@@ -59,22 +95,30 @@ export function Dashboard() {
       return;
     }
 
-    // Direct URL access — fetch everything from the backend.
+    // Fallback (direct URL access): fetch sessions, robots, and fleet in parallel.
+    // If fleet data was already loaded from a previous navigation, reuse it to
+    // avoid a redundant request.
     Promise.all([
       fetch(`http://localhost:3001/api/sessions/${fleetId}`).then(r => r.json()),
       fetch(`http://localhost:3001/api/robots/${fleetId}`).then(r => r.json()),
       fleet ? Promise.resolve(fleet) : fetch(`http://localhost:3001/api/fleets/${fleetId}`).then(r => r.json()),
     ]).then(([sessions, robots, fleetData]) => {
+      // Find the specific session this page is for within the fleet's session list.
       const raw = sessions.find((s: any) => s.id === sessionId);
       if (raw) {
+        // selectedDroneIds is stored as a comma-separated string in the DB.
         const ids: string[] = raw.selectedDroneIds ? raw.selectedDroneIds.split(',').filter(Boolean) : [];
         setCurrentSession({ ...raw, date: new Date(raw.date), selectedDroneIds: ids });
+        // Only keep the robots whose IDs appear in this session's drone list.
         setSessionDrones(robots.filter((r: any) => ids.includes(r.id)).map(mapRobot));
       }
       if (!fleet) setFleet({ ...fleetData, lastModified: new Date(fleetData.lastModified) });
     });
   }, [fleetId, sessionId]);
 
+  // When the user types in the global search bar, compute matching drones once
+  // and render a simple grid instead of the active tab content.
+  // null means "no search active" — avoids an unnecessary empty-render flicker.
   const filteredResults = globalSearch ? {
     drones: sessionDrones.filter(r =>
       r.name.toLowerCase().includes(globalSearch.toLowerCase()) ||

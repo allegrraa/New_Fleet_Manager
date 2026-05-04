@@ -1,12 +1,33 @@
+/*
+ * pages/RobotHistory.tsx
+ *
+ * Per-drone detail page — reached via /fleet/:fleetId/robot/:robotId, typically
+ * by clicking "View History" on a drone card in the Overview tab.
+ *
+ * Displays:
+ *   - A header with the drone name and a coloured status pill.
+ *   - Two info cards: Drone Info (name, IP, location, owner) and
+ *     Status Details (status, reason, last-checked date, remarks).
+ *   - A Maintenance Notes list if the drone has any recorded notes.
+ *
+ * Data source: fetched from the backend on mount using the :robotId URL param.
+ * The robot record includes its maintenance notes via Prisma's `include`.
+ */
+
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Home } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export function RobotHistory() {
+  // :robotId comes from the URL segment, e.g. /fleet/abc/robot/RBT-001
   const { robotId } = useParams();
   const navigate = useNavigate();
+
+  // robot starts null while loading; the loading state is shown until data arrives.
   const [robot, setRobot] = useState<any>(null);
 
+  // Fetch this specific drone (including its maintenance notes) on mount.
+  // Re-runs if robotId changes, e.g. if the user navigates between robot pages.
   useEffect(() => {
     fetch(`http://localhost:3001/api/robots/single/${robotId}`)
       .then(res => res.json())
@@ -19,12 +40,14 @@ export function RobotHistory() {
     </div>
   )
 
+  // Maps the mapped RobotStatus value to a Tailwind class string for the header pill.
   const statusColour: Record<string, string> = {
     'req-attention': 'text-red-400 border-red-500/30 bg-red-950/20',
     'ready': 'text-green-400 border-green-500/30 bg-green-950/20',
     'oos': 'text-neutral-400 border-red-500/30 bg-red-950/20',
   }
 
+  // rawStatus falls back through multiple fields in case the backend returns different shapes.
   const rawStatus = robot.status || robot.rawStatus || 'N/A'
   const colour = statusColour[robot.status] || 'text-neutral-400 border-neutral-500/30 bg-neutral-950/20'
 
@@ -91,6 +114,8 @@ export function RobotHistory() {
   )
 }
 
+// Row — a small helper that renders a label/value pair on one line.
+// Used repeatedly inside the info cards to keep the JSX concise.
 function Row({ label, value }: { label: string, value: string }) {
   return (
     <div className="flex justify-between text-sm">

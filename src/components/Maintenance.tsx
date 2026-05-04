@@ -1,3 +1,28 @@
+/*
+ * components/Maintenance.tsx
+ *
+ * The "Maintenance & Fixes" tab content rendered inside Dashboard.tsx.
+ *
+ * Displays maintenance notes as a kanban board with four columns:
+ *   Open → In Progress → Resolved → Archived
+ *
+ * Each card shows the drone name, problem category, maintenance severity
+ * (On-Site / Office / Origin Country), the note text, and a timestamp.
+ * Cards can be edited inline, deleted, or have their status changed via a
+ * dropdown — the change is saved to the backend immediately.
+ *
+ * The "Add Note" form works identically to the Events form: pick a drone,
+ * optional problem category (with auto-promotion after 10 uses), write a
+ * note, set severity and status, then submit.
+ *
+ * Props:
+ *   sessionDrones — the Robot[] objects in this session (used to populate drone dropdowns)
+ *
+ * Internal structure:
+ *   MaintenanceNotes — the actual component with all the logic
+ *   Maintenance      — thin wrapper exported to Dashboard.tsx
+ */
+
 import { useState, useEffect } from 'react';
 import { Search, Plus, Wrench, Building2, Plane, Pencil, Trash2 } from 'lucide-react';
 import { alertCategories } from '../data/mockData';
@@ -7,17 +32,26 @@ interface MaintenanceProps {
   sessionDrones: Robot[];
 }
 
-// ── Maintenance Notes ────────────────────────────────────────────────────────
+// ── MaintenanceNotes ─────────────────────────────────────────────────────────
+// All the state and logic lives here; Maintenance (below) is just a thin wrapper.
 
 function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
   const [notes, setNotes] = useState<MaintenanceNote[]>([]);
+
+  // Controls the search bar that filters notes by drone name or note text.
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Controls visibility of the "Add Note" form panel.
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Dynamic category list — seeds from the static alertCategories list and grows
+  // as custom categories reach 10 uses (same mechanic as Events.tsx).
   const [categories, setCategories] = useState(alertCategories);
   const [categoryUsage, setCategoryUsage] = useState<CategoryUsage[]>([]);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
 
+  // Form state for adding a new note.
   const [newNote, setNewNote] = useState({
     robotId: '',
     note: '',
@@ -26,7 +60,12 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     problemCategory: '',
   });
 
+  // editingId tracks which note card is currently being edited inline.
+  // null means no card is in edit mode.
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // editDraft holds the working copy of the note fields while the user is editing.
+  // Saved on "Save", discarded on "Cancel".
   const [editDraft, setEditDraft] = useState({
     note: '',
     severity: 'on-site' as MaintenanceSeverity,
@@ -34,11 +73,13 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     problemCategory: '',
   });
 
+  // Opens a note for inline editing by loading its current values into editDraft.
   const startEdit = (n: MaintenanceNote) => {
     setEditingId(n.id);
     setEditDraft({ note: n.note, severity: n.severity ?? 'on-site', status: n.status, problemCategory: n.problemCategory ?? '' });
   };
 
+  // PATCHes the edited fields to the backend, then applies the same changes locally.
   const saveEdit = async (noteId: string) => {
     await fetch(`http://localhost:3001/api/maintenance/${noteId}`, {
       method: 'PATCH',
@@ -49,20 +90,25 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     setEditingId(null);
   };
 
+  // DELETEs the note from the backend, then removes it from local state.
   const deleteNote = async (noteId: string) => {
     await fetch(`http://localhost:3001/api/maintenance/${noteId}`, { method: 'DELETE' });
     setNotes(notes.filter(n => n.id !== noteId));
   };
 
-  // Seeded data uses 'low'/'medium'/'high'; new notes use 'on-site'/'office'/'origin-country'
+  // Normalises the severity string from the database to the UI's MaintenanceSeverity type.
+  // The demo seed data uses 'low'/'medium'/'high'; new notes use the canonical values.
   const normSeverity = (raw: string): MaintenanceSeverity => {
     if (raw === 'origin-country' || raw === 'high') return 'origin-country';
     if (raw === 'office' || raw === 'medium') return 'office';
     return 'on-site';
   };
 
+  // Join drone IDs into a single string to use as a stable useEffect dependency
+  // (avoids re-fetching when the array reference changes but the contents don't).
   const droneIds = sessionDrones.map(d => d.id).join(',');
 
+  // Fetch maintenance notes for all drones in this session when the drone list changes.
   useEffect(() => {
     if (!droneIds) return;
     fetch('http://localhost:3001/api/maintenance/by-robots', {
@@ -74,6 +120,7 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
       .then((data: any[]) => setNotes(data.map(n => ({
         id: n.id,
         robotId: n.robotId,
+        // Denormalise the drone name so cards can display it without a join.
         robotName: sessionDrones.find(d => d.id === n.robotId)?.name ?? n.robotId,
         note: n.note,
         status: n.status as MaintenanceStatus,
@@ -83,12 +130,15 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
       }))));
   }, [droneIds]);
 
+  // Filter notes by the search query (matches drone name or note text).
   const filteredNotes = notes.filter(note =>
     searchQuery === '' ||
     note.robotName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     note.note.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Same auto-promotion mechanic as Events.tsx: custom problem categories are
+  // added to the permanent dropdown after being used 10 times.
   const trackCategoryUsage = (category: string) => {
     if (categories.includes(category) || !category) return;
     const existingUsage = categoryUsage.find(u => u.category === category);
@@ -106,6 +156,8 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     }
   };
 
+  // POSTs the new note to the backend, then prepends it to the local list so it
+  // appears immediately without a page reload.
   const handleAddNote = async () => {
     if (!newNote.robotId || !newNote.note) return;
     const robot = sessionDrones.find(r => r.id === newNote.robotId);
@@ -131,12 +183,16 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
       severity: normSeverity(created.severity),
       problemCategory: created.problemCategory || undefined,
     }, ...notes]);
+    // Reset all form fields after a successful add.
     setNewNote({ robotId: '', note: '', status: 'open', severity: 'on-site', problemCategory: '' });
     setCustomCategoryInput('');
     setShowCustomCategoryInput(false);
     setShowAddForm(false);
   };
 
+  // PATCHes just the status field on the backend — triggered by the per-card
+  // status dropdown so notes can be moved between kanban columns without opening
+  // the full edit form.
   const updateNoteStatus = async (noteId: string, newStatus: MaintenanceStatus) => {
     await fetch(`http://localhost:3001/api/maintenance/${noteId}`, {
       method: 'PATCH',
@@ -146,6 +202,7 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     setNotes(notes.map(n => n.id === noteId ? { ...n, status: newStatus } : n));
   };
 
+  // Returns the Tailwind class string for the status pill on each card.
   const getStatusColor = (status: MaintenanceStatus) => {
     switch (status) {
       case 'open': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
@@ -155,6 +212,9 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
     }
   };
 
+  // Returns the label, icon component, and colour class for a maintenance severity value.
+  // Each severity level maps to a different icon: Wrench (on-site), Building2 (office),
+  // Plane (origin-country — needs to be sent back to the manufacturer's country).
   const getSeverityConfig = (severity?: MaintenanceSeverity) => {
     switch (severity) {
       case 'on-site': return { label: 'On-Site Fix', icon: Wrench, color: 'text-green-400 bg-green-500/10 border-green-500/20' };
@@ -166,6 +226,8 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
 
   const formatDate = (date: Date) => date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  // Split filtered notes into four buckets for the kanban columns.
+  // Object.entries() is used in JSX to render each column without repeating markup.
   const groupedNotes = {
     open: filteredNotes.filter(n => n.status === 'open'),
     'in-progress': filteredNotes.filter(n => n.status === 'in-progress'),
@@ -438,6 +500,9 @@ function MaintenanceNotes({ sessionDrones }: { sessionDrones: Robot[] }) {
   );
 }
 
+// Thin wrapper that Dashboard.tsx imports.
+// The split exists so the component file could grow (e.g. a Fixes tab) without
+// cluttering the exported surface.
 export function Maintenance({ sessionDrones }: MaintenanceProps) {
   return <MaintenanceNotes sessionDrones={sessionDrones} />;
 }

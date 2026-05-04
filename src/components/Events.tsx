@@ -1,3 +1,23 @@
+/*
+ * components/Events.tsx
+ *
+ * The "Events" tab content rendered inside Dashboard.tsx.
+ *
+ * Responsibilities:
+ *   - Fetch all alert events for the drones in this session from the backend.
+ *   - Display them in a sortable table: unresolved errors first, then warnings,
+ *     then info, then resolved — newest-first within each group.
+ *   - Allow filtering by drone, category, severity, and resolved status.
+ *   - Allow adding a new event via an inline form (drone, category, severity, description).
+ *   - Allow toggling an event as resolved/unresolved and deleting events.
+ *   - Auto-promote custom categories and descriptions into the permanent dropdown
+ *     after they've been used 10 times (trackCategoryUsage / trackDescriptionUsage).
+ *
+ * Props:
+ *   sessionDrones — the Robot[] objects in this session (used to populate drone dropdowns)
+ *   sessionId     — linked to the event record so events can be queried per-session later
+ */
+
 import { useState, useEffect } from 'react';
 import { Plus, Filter, Trash2 } from 'lucide-react';
 import { alertCategories, commonProblemDescriptions } from '../data/mockData';
@@ -10,14 +30,23 @@ interface EventsProps {
 }
 
 export function Events({ sessionDrones, sessionId }: EventsProps) {
+  // Flat list of drone IDs in this session — used as the query key for the backend fetch.
   const sessionDroneIds = sessionDrones.map(d => d.id);
+
   const [alerts, setAlerts] = useState<Alert[]>([]);
+
+  // Filter state — each filter defaults to 'all' (no filtering).
   const [filterRobot, setFilterRobot] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState<'all' | AlertSeverity>('all');
   const [filterResolved, setFilterResolved] = useState<'all' | 'resolved' | 'unresolved'>('all');
+
+  // UI toggle state
   const [showFilters, setShowFilters] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Dynamic category and description lists — start with the static seed lists and
+  // grow as custom entries are used 10+ times (see trackCategoryUsage below).
   const [categories, setCategories] = useState(alertCategories);
   const [categoryUsage, setCategoryUsage] = useState<CategoryUsage[]>([]);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
@@ -26,6 +55,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
   const [customDescriptionInput, setCustomDescriptionInput] = useState('');
   const [showCustomDescription, setShowCustomDescription] = useState(false);
 
+  // Form state for the "Add Event" panel.
   const [newAlert, setNewAlert] = useState({
     robotId: '',
     category: '',
@@ -33,9 +63,14 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     description: '',
   });
 
+  // Stable string key derived from the drone ID list.
+  // useEffect depends on this instead of the array directly to avoid re-running
+  // on every render (array identity changes every render even if contents are the same).
   const droneIdKey = sessionDroneIds.join(',');
 
-  // Load events from backend when the drone list changes
+  // Fetch all events for this session's drones when the drone list changes.
+  // Uses a POST /by-robots endpoint because GET requests can't carry a body,
+  // and the drone list could be too long for URL query params.
   useEffect(() => {
     if (!sessionDroneIds.length) return;
     fetch('http://localhost:3001/api/events/by-robots', {
@@ -48,6 +83,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
         setAlerts(data.map(e => ({
           id: e.id,
           robotId: e.robotId,
+          // Look up the drone name from the session list; fall back to the ID if not found.
           robotName: sessionDrones.find(d => d.id === e.robotId)?.name ?? e.robotId,
           category: e.category,
           severity: e.severity as AlertSeverity,
@@ -59,6 +95,8 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
       .catch(console.error);
   }, [droneIdKey]);
 
+  // Apply all active filters then sort: unresolved before resolved, higher severity
+  // first within the same resolved state, newest first within the same severity.
   const filteredAlerts = alerts
     .filter(alert => {
       const matchesRobot = filterRobot === 'all' || alert.robotId === filterRobot;
@@ -70,16 +108,22 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
       return matchesRobot && matchesCategory && matchesSeverity && matchesResolved;
     })
     .sort((a, b) => {
+      // Resolved alerts always sink to the bottom of the list.
       if (a.resolved && !b.resolved) return 1;
       if (!a.resolved && b.resolved) return -1;
+      // Within the same resolved state, sort by severity (error → warning → info).
       const severityOrder = { 'error': 0, 'warning': 1, 'info': 2, 'resolved': 3 };
       const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
       if (severityDiff !== 0) return severityDiff;
+      // Same severity: show the most recent event first.
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
 
+  // Auto-promotion logic: tracks how many times a custom category has been used.
+  // Once a category reaches 10 uses it is added permanently to the dropdown list
+  // so operators don't need to retype it every time.
   const trackCategoryUsage = (category: string) => {
-    if (categories.includes(category)) return;
+    if (categories.includes(category)) return; // already a permanent category
     const existingUsage = categoryUsage.find(u => u.category === category);
     let newUsage: CategoryUsage[];
     if (existingUsage) {
@@ -95,6 +139,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     }
   };
 
+  // Same logic as trackCategoryUsage but for problem description strings.
   const trackDescriptionUsage = (description: string) => {
     if (problemDescriptions.includes(description)) return;
     const existingUsage = descriptionUsage.find(u => u.category === description);
@@ -112,6 +157,8 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     }
   };
 
+  // POST the new event to the backend, then prepend it to the local alerts list
+  // so it appears instantly at the top without a page reload.
   const handleAddAlert = async () => {
     if (!newAlert.robotId || !newAlert.category || !newAlert.description) return;
     const robot = sessionDrones.find(r => r.id === newAlert.robotId);
@@ -131,6 +178,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     });
     const created = await res.json();
 
+    // Record usage so custom categories/descriptions can be auto-promoted.
     trackCategoryUsage(newAlert.category);
     trackDescriptionUsage(newAlert.description);
 
@@ -146,6 +194,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     };
 
     setAlerts([alert, ...alerts]);
+    // Reset form fields after successful submission.
     setNewAlert({ robotId: '', category: '', severity: 'info', description: '' });
     setCustomCategoryInput('');
     setCustomDescriptionInput('');
@@ -153,11 +202,13 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     setShowAddForm(false);
   };
 
+  // DELETE the event from the backend, then remove it from the local list.
   const deleteAlert = async (alertId: string) => {
     await fetch(`http://localhost:3001/api/events/${alertId}`, { method: 'DELETE' });
     setAlerts(alerts.filter(a => a.id !== alertId));
   };
 
+  // PATCH the resolved flag on the backend, then update the local list optimistically.
   const toggleResolved = async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
     if (!alert) return;
@@ -169,6 +220,7 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
       body: JSON.stringify({ resolved: nowResolved }),
     });
 
+    // Update the local state immediately so the UI reflects the change without a refetch.
     setAlerts(alerts.map(a =>
       a.id === alertId
         ? { ...a, resolved: nowResolved, resolvedAt: nowResolved ? new Date() : undefined }
@@ -176,6 +228,8 @@ export function Events({ sessionDrones, sessionId }: EventsProps) {
     ));
   };
 
+  // Adds a brand-new category via a browser prompt — used as an escape hatch from
+  // the dropdown when the desired category has never been used before.
   const addCategory = () => {
     const newCategory = prompt('Enter new category name:');
     if (newCategory && !categories.includes(newCategory)) {
