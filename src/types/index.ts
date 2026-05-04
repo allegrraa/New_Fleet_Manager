@@ -19,7 +19,7 @@
 /* ── Status / severity union types ─────────────────────────────────────────── */
 
 // All possible operational states a drone can be in.
-export type RobotStatus = 'ready-to-fly' | 'warning' | 'critical' | 'offline' | 'maintenance-due';
+export type RobotStatus = 'ready' | 'oos' | 'req-attention';
 
 // Severity levels for alert events.
 export type AlertSeverity = 'info' | 'warning' | 'error' | 'resolved';
@@ -94,11 +94,9 @@ export interface Session {
   fleetId: string;                // Foreign key → Fleet.id
   selectedDroneIds: string[];     // Subset of fleet drones included in this session
   totalDrones: number;
-  readyToFly: number;
-  warning: number;
-  critical: number;
-  offline: number;
-  maintenanceDue: number;
+  ready: number;
+  oos: number;
+  reqAttention: number;
   notes: string;
 }
 

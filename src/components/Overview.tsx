@@ -22,7 +22,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, TrendingUp, AlertCircle, ChevronDown, ChevronRight, History } from 'lucide-react';
+import { Search, AlertCircle, ChevronDown, ChevronRight, History } from 'lucide-react';
 import { mockAlerts } from '../data/mockData';
 import type { Robot, RobotStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
@@ -48,24 +48,19 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
   // Toggling this to true reveals all of them.
   const [showAllReadyToFly, setShowAllReadyToFly] = useState(false);
 
-  // Summary card values — all derived from sessionDrones on every render.
+  // Summary card counts — derived from all sessionDrones (unfiltered).
   const totalRobots = sessionDrones.length;
-  // "Online" excludes 'offline' and 'critical'; includes warning and maintenance because
-  // those drones are still communicating and partially operational.
-  const onlineRobots = sessionDrones.filter(r => r.status === 'ready-to-fly' || r.status === 'warning' || r.status === 'maintenance-due').length;
-  // "Warning" card counts both warning and maintenance-due as attention-needed statuses.
-  const warningRobots = sessionDrones.filter(r => r.status === 'warning' || r.status === 'maintenance-due').length;
-  const errorRobots = sessionDrones.filter(r => r.status === 'critical').length;
+  const readyCount = sessionDrones.filter(r => r.status === 'ready').length;
+  const reqAttentionCount = sessionDrones.filter(r => r.status === 'req-attention').length;
+  const oosCount = sessionDrones.filter(r => r.status === 'oos').length;
 
   // sortedRobots — a stable copy of sessionDrones ordered by urgency so critical drones
   // always appear at the top of the card grid regardless of filter state.
   const sortedRobots = [...sessionDrones].sort((a, b) => {
     const statusOrder: Record<RobotStatus, number> = {
-      'critical': 0,
-      'warning': 1,
-      'maintenance-due': 2,
-      'ready-to-fly': 3,
-      'offline': 4,
+      'req-attention': 0,
+      'oos': 1,
+      'ready': 2,
     };
     return statusOrder[a.status] - statusOrder[b.status];
   });
@@ -86,12 +81,12 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
   });
 
   // Pre-partition filtered drones into the three display sections rendered below.
-  const priorityRobots = filteredRobots.filter(r => r.status === 'critical' || r.status === 'warning' || r.status === 'maintenance-due');
-  const readyToFlyRobots = filteredRobots.filter(r => r.status === 'ready-to-fly');
-  const offlineRobots = filteredRobots.filter(r => r.status === 'offline');
+  const reqAttentionRobots = filteredRobots.filter(r => r.status === 'req-attention');
+  const readyRobots = filteredRobots.filter(r => r.status === 'ready');
+  const oosRobots = filteredRobots.filter(r => r.status === 'oos');
 
-  // Limit the visible ready-to-fly cards to 3 unless the user has clicked "Show more".
-  const displayedReadyToFly = showAllReadyToFly ? readyToFlyRobots : readyToFlyRobots.slice(0, 3);
+  // Limit the visible ready cards to 3 unless the user has clicked "Show more".
+  const displayedReady = showAllReadyToFly ? readyRobots : readyRobots.slice(0, 3);
 
   // toggleExpand — adds the robotId to the expanded set if it isn't there; removes it if it is.
   // Creates a new Set each time so React detects the state change and re-renders.
@@ -140,7 +135,6 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
           <div className="flex flex-col h-full">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <div className="font-mono text-xs text-neutral-600 mb-1">{robot.id}</div>
                 <div className="font-semibold text-lg text-violet-300 mb-3">{robot.name}</div>
               </div>
               <ChevronDown className={`w-5 h-5 text-violet-500/50 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -148,6 +142,9 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
 
             <div className="space-y-3 mb-4">
               <StatusBadge status={robot.status} />
+              {robot.currentTask && robot.currentTask !== 'N/A' && (
+                <div className="text-xs text-neutral-400 font-mono truncate">{robot.currentTask}</div>
+              )}
 
               <div className="flex items-center gap-2 bg-black/40 px-3 py-2 rounded border border-violet-500/10">
                 <div className={`w-2.5 h-2.5 rounded-full ${
@@ -207,26 +204,20 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
         </div>
         <div className="border border-green-500/20 bg-gradient-to-br from-black/40 to-green-950/10 rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl group-hover:bg-green-500/10 transition-all"></div>
-          <div className="text-sm text-neutral-500 mb-2 font-mono uppercase tracking-wider">Online</div>
-          <div className="text-4xl font-bold font-mono text-green-400">{onlineRobots}</div>
+          <div className="text-sm text-neutral-500 mb-2 font-mono uppercase tracking-wider">Ready</div>
+          <div className="text-4xl font-bold font-mono text-green-400">{readyCount}</div>
           <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-green-500/50 to-transparent"></div>
-        </div>
-        <div className="border border-orange-500/20 bg-gradient-to-br from-black/40 to-orange-950/10 rounded-lg p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-2xl group-hover:bg-orange-500/10 transition-all"></div>
-          <div className="text-sm text-neutral-500 mb-2 flex items-center justify-between font-mono uppercase tracking-wider">
-            <span>Warning</span>
-            <div className="flex items-center gap-1 text-xs text-orange-400">
-              <TrendingUp className="w-3 h-3" />
-              <span>+2</span>
-            </div>
-          </div>
-          <div className="text-4xl font-bold font-mono text-orange-400">{warningRobots}</div>
-          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-orange-500/50 to-transparent"></div>
         </div>
         <div className="border border-red-500/20 bg-gradient-to-br from-black/40 to-red-950/10 rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-2xl group-hover:bg-red-500/10 transition-all"></div>
-          <div className="text-sm text-neutral-500 mb-2 font-mono uppercase tracking-wider">Critical</div>
-          <div className="text-4xl font-bold font-mono text-red-400">{errorRobots}</div>
+          <div className="text-sm text-neutral-500 mb-2 font-mono uppercase tracking-wider">Req Attention</div>
+          <div className="text-4xl font-bold font-mono text-red-400">{reqAttentionCount}</div>
+          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
+        </div>
+        <div className="border border-red-500/20 bg-gradient-to-br from-black/40 to-red-950/10 rounded-lg p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-2xl group-hover:bg-red-500/10 transition-all"></div>
+          <div className="text-sm text-neutral-500 mb-2 font-mono uppercase tracking-wider">OOS</div>
+          <div className="text-4xl font-bold font-mono text-red-400">{oosCount}</div>
           <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
         </div>
       </div>
@@ -287,45 +278,45 @@ export function Overview({ sessionDrones, fleetId }: OverviewProps) {
       </div>
 
       <div className="space-y-6">
-        {priorityRobots.length > 0 && (
+        {reqAttentionRobots.length > 0 && (
           <div>
-            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Priority Attention</h3>
+            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Req Attention</h3>
             <div className="grid grid-cols-4 gap-4">
-              {priorityRobots.map(robot => (
+              {reqAttentionRobots.map(robot => (
                 <RobotCard key={robot.id} robot={robot} />
               ))}
             </div>
           </div>
         )}
 
-        {readyToFlyRobots.length > 0 && (
+        {oosRobots.length > 0 && (
           <div>
-            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Ready to Fly</h3>
+            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">OOS</h3>
             <div className="grid grid-cols-4 gap-4">
-              {displayedReadyToFly.map(robot => (
+              {oosRobots.map(robot => (
                 <RobotCard key={robot.id} robot={robot} />
               ))}
             </div>
-            {readyToFlyRobots.length > 3 && !showAllReadyToFly && (
+          </div>
+        )}
+
+        {readyRobots.length > 0 && (
+          <div>
+            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Ready</h3>
+            <div className="grid grid-cols-4 gap-4">
+              {displayedReady.map(robot => (
+                <RobotCard key={robot.id} robot={robot} />
+              ))}
+            </div>
+            {readyRobots.length > 3 && !showAllReadyToFly && (
               <button
                 onClick={() => setShowAllReadyToFly(true)}
                 className="mt-3 w-full py-2 border border-violet-500/20 rounded-lg text-sm text-violet-400 hover:bg-violet-500/10 transition-all flex items-center justify-center gap-2"
               >
                 <ChevronRight className="w-4 h-4" />
-                Show {readyToFlyRobots.length - 3} more
+                Show {readyRobots.length - 3} more
               </button>
             )}
-          </div>
-        )}
-
-        {offlineRobots.length > 0 && (
-          <div>
-            <h3 className="text-sm font-mono uppercase tracking-wider text-neutral-500 mb-3">Offline</h3>
-            <div className="grid grid-cols-4 gap-4">
-              {offlineRobots.map(robot => (
-                <RobotCard key={robot.id} robot={robot} />
-              ))}
-            </div>
           </div>
         )}
       </div>

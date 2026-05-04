@@ -18,7 +18,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Plus, Calendar, FileText, TrendingUp, TrendingDown, ArrowRight, CheckCircle2, Circle, ArrowLeft, Cpu } from 'lucide-react';
+import { Plus, Calendar, FileText, TrendingUp, TrendingDown, ArrowRight, CheckCircle2, Circle, ArrowLeft, Home, Cpu } from 'lucide-react';
 import { mockSessions, mockRobots, mockFleets } from '../data/mockData';
 import type { Session, Robot } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -70,11 +70,9 @@ export function SessionSelection() {
   // before the user finalises session creation.
   const currentStats = {
     total: selectedDrones.length,
-    readyToFly: selectedDrones.filter(d => d.status === 'ready-to-fly').length,
-    warning: selectedDrones.filter(d => d.status === 'warning').length,
-    critical: selectedDrones.filter(d => d.status === 'critical').length,
-    offline: selectedDrones.filter(d => d.status === 'offline').length,
-    maintenanceDue: selectedDrones.filter(d => d.status === 'maintenance-due').length,
+    ready: selectedDrones.filter(d => d.status === 'ready').length,
+    reqAttention: selectedDrones.filter(d => d.status === 'req-attention').length,
+    oos: selectedDrones.filter(d => d.status === 'oos').length,
   };
 
   const handleCreateSession = () => {
@@ -90,11 +88,9 @@ export function SessionSelection() {
       fleetId: fleetId || '',
       selectedDroneIds: newSession.selectedDroneIds,
       totalDrones: currentStats.total,
-      readyToFly: currentStats.readyToFly,
-      warning: currentStats.warning,
-      critical: currentStats.critical,
-      offline: currentStats.offline,
-      maintenanceDue: currentStats.maintenanceDue,
+      ready: currentStats.ready,
+      reqAttention: currentStats.reqAttention,
+      oos: currentStats.oos,
       notes: newSession.notes,
     };
 
@@ -126,11 +122,18 @@ export function SessionSelection() {
 
       <div className="max-w-4xl mx-auto relative z-10">
         <div className="mb-8 flex items-center gap-4">
-          <Link
-            to={`/fleet/${fleetId}`}
+          <button
+            onClick={() => navigate(-1)}
             className="w-10 h-10 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 hover:border-violet-500/40 transition-all"
           >
             <ArrowLeft className="w-5 h-5 text-violet-400" />
+          </button>
+          <Link
+            to="/"
+            className="w-10 h-10 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 hover:border-violet-500/40 transition-all"
+            title="Home"
+          >
+            <Home className="w-5 h-5 text-violet-400" />
           </Link>
           <div>
             <h2 className="text-lg font-semibold text-violet-300">{location.state?.fleetName || fleet.name}</h2>
@@ -211,7 +214,6 @@ export function SessionSelection() {
                               <Circle className="w-5 h-5 text-neutral-600 flex-shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="font-mono text-xs text-neutral-600">{drone.id}</div>
                               <div className="font-semibold text-sm text-violet-300 truncate">{drone.name}</div>
                               <StatusBadge status={drone.status} />
                             </div>
@@ -244,15 +246,15 @@ export function SessionSelection() {
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div>
                         <span className="text-neutral-500">Ready:</span>
-                        <span className="ml-2 text-green-400 font-mono">{currentStats.readyToFly} ({getPercentage(currentStats.readyToFly, currentStats.total)}%)</span>
+                        <span className="ml-2 text-green-400 font-mono">{currentStats.ready} ({getPercentage(currentStats.ready, currentStats.total)}%)</span>
                       </div>
                       <div>
-                        <span className="text-neutral-500">Warning:</span>
-                        <span className="ml-2 text-orange-400 font-mono">{currentStats.warning} ({getPercentage(currentStats.warning, currentStats.total)}%)</span>
+                        <span className="text-neutral-500">Req Attention:</span>
+                        <span className="ml-2 text-red-400 font-mono">{currentStats.reqAttention} ({getPercentage(currentStats.reqAttention, currentStats.total)}%)</span>
                       </div>
                       <div>
-                        <span className="text-neutral-500">Critical:</span>
-                        <span className="ml-2 text-red-400 font-mono">{currentStats.critical} ({getPercentage(currentStats.critical, currentStats.total)}%)</span>
+                        <span className="text-neutral-500">OOS:</span>
+                        <span className="ml-2 text-neutral-400 font-mono">{currentStats.oos} ({getPercentage(currentStats.oos, currentStats.total)}%)</span>
                       </div>
                     </div>
                   </div>
@@ -288,11 +290,11 @@ export function SessionSelection() {
             </h3>
             <div className="space-y-3">
               {sessions.map(session => {
-                const readyPercentage = getPercentage(session.readyToFly, session.totalDrones);
+                const readyPercentage = getPercentage(session.ready, session.totalDrones);
                 // Compare against the session immediately after this one in the list
                 // (sessions are displayed newest-first, so [index + 1] is the older session).
                 const lastSession = sessions[sessions.indexOf(session) + 1];
-                const trend = lastSession ? session.readyToFly - lastSession.readyToFly : 0;
+                const trend = lastSession ? session.ready - lastSession.ready : 0;
 
                 return (
                   <button
@@ -325,26 +327,18 @@ export function SessionSelection() {
                         <ArrowRight className="w-5 h-5 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-                    <div className="grid grid-cols-5 gap-2 text-xs mb-3">
+                    <div className="grid grid-cols-3 gap-2 text-xs mb-3">
                       <div className="bg-black/40 rounded px-3 py-2 border border-green-500/20">
                         <div className="text-neutral-600 mb-1">Ready</div>
                         <div className="text-green-400 font-mono text-sm">{readyPercentage}%</div>
                       </div>
-                      <div className="bg-black/40 rounded px-3 py-2 border border-orange-500/20">
-                        <div className="text-neutral-600 mb-1">Warning</div>
-                        <div className="text-orange-400 font-mono text-sm">{getPercentage(session.warning, session.totalDrones)}%</div>
-                      </div>
                       <div className="bg-black/40 rounded px-3 py-2 border border-red-500/20">
-                        <div className="text-neutral-600 mb-1">Critical</div>
-                        <div className="text-red-400 font-mono text-sm">{getPercentage(session.critical, session.totalDrones)}%</div>
+                        <div className="text-neutral-600 mb-1">Req Attention</div>
+                        <div className="text-red-400 font-mono text-sm">{getPercentage(session.reqAttention, session.totalDrones)}%</div>
                       </div>
                       <div className="bg-black/40 rounded px-3 py-2 border border-neutral-500/20">
-                        <div className="text-neutral-600 mb-1">Offline</div>
-                        <div className="text-neutral-400 font-mono text-sm">{getPercentage(session.offline, session.totalDrones)}%</div>
-                      </div>
-                      <div className="bg-black/40 rounded px-3 py-2 border border-purple-500/20">
-                        <div className="text-neutral-600 mb-1">Maint.</div>
-                        <div className="text-purple-400 font-mono text-sm">{getPercentage(session.maintenanceDue, session.totalDrones)}%</div>
+                        <div className="text-neutral-600 mb-1">OOS</div>
+                        <div className="text-neutral-400 font-mono text-sm">{getPercentage(session.oos, session.totalDrones)}%</div>
                       </div>
                     </div>
                     {session.notes && (

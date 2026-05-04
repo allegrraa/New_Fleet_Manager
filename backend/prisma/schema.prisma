@@ -29,11 +29,9 @@ model Session {
   fleet            Fleet    @relation(fields: [fleetId], references: [id])
   selectedDroneIds String
   totalDrones      Int
-  readyToFly       Int
-  warning          Int
-  critical         Int
-  offline          Int
-  maintenanceDue   Int
+  ready            Int      @default(0)
+  reqAttention     Int      @default(0)
+  oos              Int      @default(0)
   notes            String   @default("")
 }
 
@@ -49,6 +47,7 @@ model Robot {
   remarks         String    @default("")
   fleetId         String
   maintenanceNotes MaintenanceNote[]
+  events Event[]
 }
 
 model MaintenanceNote {
@@ -60,4 +59,16 @@ model MaintenanceNote {
   severity        String   @default("low")
   problemCategory String   @default("")
   timestamp       DateTime @default(now())
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  robotId     String
+  robot       Robot    @relation(fields: [robotId], references: [id])
+  category    String
+  severity    String
+  description String
+  resolved    Boolean  @default(false)
+  timestamp   DateTime @default(now())
+  sessionId   String   @default("")
 }

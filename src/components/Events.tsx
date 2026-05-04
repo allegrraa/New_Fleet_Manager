@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Filter } from 'lucide-react';
+import { Plus, Filter } from 'lucide-react';
 import { mockAlerts, alertCategories, commonProblemDescriptions } from '../data/mockData';
 import type { Alert, AlertSeverity, CategoryUsage, Robot } from '../types';
 import { StatusBadge } from './StatusBadge';
@@ -13,7 +13,6 @@ export function Events({ sessionDrones }: EventsProps) {
   const [alerts, setAlerts] = useState<Alert[]>(
     mockAlerts.filter(a => sessionDroneIds.includes(a.robotId))
   );
-  const [searchQuery, setSearchQuery] = useState('');
   const [filterRobot, setFilterRobot] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState<'all' | AlertSeverity>('all');
@@ -38,11 +37,6 @@ export function Events({ sessionDrones }: EventsProps) {
 
   const filteredAlerts = alerts
     .filter(alert => {
-      const matchesSearch = searchQuery === '' ||
-        alert.robotName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        alert.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        alert.category.toLowerCase().includes(searchQuery.toLowerCase());
-
       const matchesRobot = filterRobot === 'all' || alert.robotId === filterRobot;
       const matchesCategory = filterCategory === 'all' || alert.category === filterCategory;
       const matchesSeverity = filterSeverity === 'all' || alert.severity === filterSeverity;
@@ -50,7 +44,7 @@ export function Events({ sessionDrones }: EventsProps) {
         (filterResolved === 'resolved' && alert.resolved) ||
         (filterResolved === 'unresolved' && !alert.resolved);
 
-      return matchesSearch && matchesRobot && matchesCategory && matchesSeverity && matchesResolved;
+      return matchesRobot && matchesCategory && matchesSeverity && matchesResolved;
     })
     .sort((a, b) => {
       if (a.resolved && !b.resolved) return 1;
@@ -181,16 +175,6 @@ export function Events({ sessionDrones }: EventsProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-500" />
-          <input
-            type="text"
-            placeholder="Search events by drone, description, or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-black/50 border border-violet-500/20 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-violet-500/50 transition-colors font-mono placeholder:text-neutral-600"
-          />
-        </div>
         <button
           onClick={() => setShowFilters(!showFilters)}
           className={`px-4 py-3 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${

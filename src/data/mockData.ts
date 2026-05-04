@@ -44,7 +44,7 @@ export const mockRobots: Robot[] = [
   {
     id: 'RBT-001',
     name: 'Alpha01',
-    status: 'critical',
+    status: 'req-attention',
     battery: 25,
     location: 'Zone A-3',
     lastSeen: new Date('2026-04-08T11:45:00'),
@@ -82,7 +82,7 @@ export const mockRobots: Robot[] = [
   {
     id: 'RBT-002',
     name: 'Beta02',
-    status: 'warning',
+    status: 'req-attention',
     battery: 60,
     location: 'Zone B-1',
     lastSeen: new Date('2026-04-08T12:00:00'),
@@ -99,7 +99,7 @@ export const mockRobots: Robot[] = [
   {
     id: 'RBT-003',
     name: 'COBRA03',
-    status: 'ready-to-fly', 
+    status: 'ready',
     battery: 95,
     location: 'Zone C-2',
     lastSeen: new Date('2026-04-08T12:15:00'),
@@ -116,7 +116,7 @@ export const mockRobots: Robot[] = [
   {
     id: 'RBT-004',
     name: 'LYNX04',
-    status: 'offline',
+    status: 'req-attention',
     battery: 0,
     location: 'Zone D-4',
     lastSeen: new Date('2026-04-08T10:00:00'),
@@ -134,7 +134,7 @@ export const mockRobots: Robot[] = [
   {
     id: 'RBT-005',
     name: 'Delta05',
-    status: 'maintenance-due',  
+    status: 'req-attention',
     battery: 40,
     location: 'Zone E-5',
     lastSeen: new Date('2026-04-08T12:30:00'),
@@ -265,11 +265,9 @@ export const mockSessions: Session[] = [
         fleetId: '1',
         selectedDroneIds: ['RBT-001', 'RBT-002', 'RBT-003', 'RBT-004', 'RBT-006', 'RBT-007'],
         totalDrones: 6,
-        readyToFly: 4,
-        warning: 1,
-        critical: 1,
-        offline: 0,
-        maintenanceDue: 0,
+        ready: 4,
+        reqAttention: 2,
+        oos: 0,
         notes: 'Standard flight check with 6 drones.'
     },
     {
@@ -279,11 +277,9 @@ export const mockSessions: Session[] = [
         fleetId: '1',
         selectedDroneIds: ['RBT-002', 'RBT-003', 'RBT-004', 'RBT-005', 'RBT-006', 'RBT-007', 'RBT-008', 'RBT-009', 'RBT-010'],
         totalDrones: 9,
-        readyToFly: 6,
-        warning: 2,
-        critical: 1,
-        offline: 0,
-        maintenanceDue: 0,
+        ready: 6,
+        reqAttention: 3,
+        oos: 0,
         notes: 'Standard flight check with 9 drones.'
     },
 ];

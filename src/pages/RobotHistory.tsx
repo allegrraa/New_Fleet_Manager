@@ -1,9 +1,10 @@
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Home } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export function RobotHistory() {
-  const { fleetId, robotId } = useParams();
+  const { robotId } = useParams();
+  const navigate = useNavigate();
   const [robot, setRobot] = useState<any>(null);
 
   useEffect(() => {
@@ -19,11 +20,9 @@ export function RobotHistory() {
   )
 
   const statusColour: Record<string, string> = {
-    'critical': 'text-red-400 border-red-500/30 bg-red-950/20',
-    'warning': 'text-orange-400 border-orange-500/30 bg-orange-950/20',
-    'ready-to-fly': 'text-green-400 border-green-500/30 bg-green-950/20',
-    'offline': 'text-neutral-400 border-neutral-500/30 bg-neutral-950/20',
-    'maintenance-due': 'text-purple-400 border-purple-500/30 bg-purple-950/20',
+    'req-attention': 'text-red-400 border-red-500/30 bg-red-950/20',
+    'ready': 'text-green-400 border-green-500/30 bg-green-950/20',
+    'oos': 'text-neutral-400 border-red-500/30 bg-red-950/20',
   }
 
   const rawStatus = robot.status || robot.rawStatus || 'N/A'
@@ -32,11 +31,18 @@ export function RobotHistory() {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <header className="border-b border-violet-500/10 bg-black/80 px-8 py-4 flex items-center gap-4">
-        <Link
-          to={`/fleet/${fleetId}`}
+        <button
+          onClick={() => navigate(-1)}
           className="w-8 h-8 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 transition-all"
         >
           <ArrowLeft className="w-4 h-4 text-violet-400" />
+        </button>
+        <Link
+          to="/"
+          className="w-8 h-8 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 transition-all"
+          title="Home"
+        >
+          <Home className="w-4 h-4 text-violet-400" />
         </Link>
         <h1 className="text-xl font-bold text-violet-400">{robot.name}</h1>
         <span className={`text-xs font-mono px-3 py-1 rounded-full border ${colour}`}>

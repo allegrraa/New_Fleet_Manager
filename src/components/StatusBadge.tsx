@@ -17,11 +17,9 @@ import type { RobotStatus, AlertSeverity } from '../types';
 
 // Maps every RobotStatus value to a display label and Tailwind CSS classes.
 const statusConfig: Record<RobotStatus, { label: string; className: string }> = {
-  'ready-to-fly':   { label: 'Ready to Fly', className: 'bg-green-500/10 text-green-400 border border-green-500/30' },
-  'warning':        { label: 'Warning',       className: 'bg-orange-500/10 text-orange-400 border border-orange-500/30' },
-  'critical':       { label: 'Critical',      className: 'bg-red-500/10 text-red-400 border border-red-500/30' },
-  'offline':        { label: 'Offline',       className: 'bg-neutral-500/10 text-neutral-400 border border-neutral-500/30' },
-  'maintenance-due':{ label: 'Maintenance',   className: 'bg-blue-500/10 text-blue-400 border border-blue-500/30' },
+  'ready':   { label: 'Ready', className: 'bg-green-500/10 text-green-400 border border-green-500/30' },
+  'req-attention': { label: 'Req Attention', className: 'bg-red-500/10 text-red-400 border border-red-500/30' },
+  'oos':           { label: 'OOS',           className: 'bg-neutral-500/10 text-neutral-400 border border-neutral-500/30' },
 };
 
 // Maps every AlertSeverity value to a display label and Tailwind CSS classes.

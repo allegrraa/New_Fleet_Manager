@@ -29,4 +29,12 @@ router.post('/', async (req, res) => {
   })
   res.json(session)
 })
+router.patch('/:id', async (req, res) => {
+  const session = await prisma.session.update({
+    where: { id: req.params.id },
+    data: { sessionNumber: req.body.sessionNumber },
+  })
+  res.json(session)
+})
+
 export default router

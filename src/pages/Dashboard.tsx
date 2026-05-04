@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Search, Cpu } from 'lucide-react';
+import { ArrowLeft, Home, Search, Cpu } from 'lucide-react';
 import { Overview } from '../components/Overview';
 import { Events } from '../components/Events';
 import { Maintenance } from '../components/Maintenance';
@@ -10,10 +10,9 @@ type Tab = 'overview' | 'events' | 'maintenance';
 
 function mapStatus(raw: string): RobotStatus {
   const s = raw?.trim().toUpperCase();
-  if (s === 'WORKING') return 'ready-to-fly';
-  if (s === 'HW FAULT' || s === 'SW FAULT' || s === 'OOS') return 'critical';
-  if (s === 'FAULTY') return 'warning';
-  return 'maintenance-due';
+  if (s === 'WORKING') return 'ready';
+  if (s === 'OOS') return 'oos';
+  return 'req-attention';
 }
 
 function mapRobot(r: any): Robot {
@@ -42,7 +41,6 @@ export function Dashboard() {
   const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [showNotifications, setShowNotifications] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
 
   const [currentSession, setCurrentSession] = useState<Session | null>(
@@ -97,11 +95,18 @@ export function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4 flex-1">
               <div className="flex items-center gap-3">
-                <Link
-                  to="/"
+                <button
+                  onClick={() => navigate(-1)}
                   className="w-8 h-8 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 hover:border-violet-500/40 transition-all"
                 >
                   <ArrowLeft className="w-4 h-4 text-violet-400" />
+                </button>
+                <Link
+                  to="/"
+                  className="w-8 h-8 rounded border border-violet-500/20 flex items-center justify-center hover:bg-violet-500/10 hover:border-violet-500/40 transition-all"
+                  title="Home"
+                >
+                  <Home className="w-4 h-4 text-violet-400" />
                 </Link>
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20 border border-violet-500/30 flex items-center justify-center">
                   <Cpu className="w-6 h-6 text-violet-400" />
@@ -133,20 +138,6 @@ export function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate(`/fleet/${fleetId}`, { state: { newFleet: fleet } })}
-                className="px-4 py-2 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4 text-violet-400" />
-                <span className="text-violet-400">Back to Fleet</span>
-              </button>
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative w-10 h-10 rounded-lg bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 flex items-center justify-center transition-all"
-              >
-                <Bell className="w-5 h-5 text-violet-400" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-lg shadow-red-500/50"></span>
-              </button>
             </div>
           </div>
 
